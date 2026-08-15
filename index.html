@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>AR Floor & Cubes</title>
+  <title>CameraUp AR Floor & Cubes</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -84,6 +84,13 @@
       requiredFeatures: ['local-floor']
     }));
 
+    renderer.xr.addEventListener('sessionstart', () => {
+      const refSpace = renderer.xr.getReferenceSpace();
+      // Сдвигаем origin вверх на 1.6 м → камера стартует на высоте 1.6 м над полом
+      const offset = new XRRigidTransform({ x: 0, y: 1.6, z: 0 });
+      renderer.xr.setReferenceSpace(refSpace.getOffsetReferenceSpace(offset));
+    });
+    
     /* ---------- цикл ---------- */
     renderer.setAnimationLoop(() => renderer.render(scene, camera));
 
