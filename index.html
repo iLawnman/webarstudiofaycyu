@@ -3,19 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>CameraUp AR Floor & Cubes</title>
+  <title>AR Floor, Cubes & Image Tracking</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     #hint {
       position: absolute; top: 24px; left: 0; width: 100%; text-align: center;
       color: #fff; font-size: 14px; pointer-events: none; z-index: 10;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.9); padding: 0 20px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9); padding: 0 20px; line-height: 1.5;
     }
+    #ar-btn {
+      position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+      padding: 14px 28px; font-size: 16px; border: none; border-radius: 8px;
+      background: #fff; color: #000; font-weight: 600; cursor: pointer; z-index: 20;
+    }
+    #ar-btn:disabled { opacity: 0.5; cursor: wait; }
   </style>
 </head>
 <body>
-  <div id="hint">Нажмите «Start AR» и двигайтесь, чтобы подойти к кубам</div>
+  <div id="hint">Загрузка целевого изображения…</div>
+  <button id="ar-btn" disabled>Start AR</button>
 
   <script type="importmap">
   {
@@ -28,7 +35,6 @@
 
   <script type="module">
     import * as THREE from 'three';
-    import { ARButton } from 'three/addons/webxr/ARButton.js';
 
     /* ---------- сцена ---------- */
     const scene = new THREE.Scene();
@@ -60,39 +66,132 @@
     scene.add(floor);
 
     /* ---------- кубы по углам ---------- */
-    const s = 0.35;                 // размер куба
-    const d = 1.3;                  // расстояние от центра до угла
-    const geo = new THREE.BoxGeometry(s, s, s);
+    const s = 0.35, d = 1.3;
+    const cubeGeo = new THREE.BoxGeometry(s, s, s);
     const colors = [0xff3366, 0x33ff66, 0x3366ff, 0xffcc00];
     const positions = [
-      [-d, s/2, -d],
-      [ d, s/2, -d],
-      [-d, s/2,  d],
-      [ d, s/2,  d],
+      [-d, s/2, -d], [d, s/2, -d], [-d, s/2, d], [d, s/2, d]
     ];
-
     positions.forEach((pos, i) => {
       const mat = new THREE.MeshStandardMaterial({ color: colors[i], roughness: 0.3, metalness: 0.1 });
-      const cube = new THREE.Mesh(geo, mat);
+      const cube = new THREE.Mesh(cubeGeo, mat);
       cube.position.set(...pos);
       scene.add(cube);
     });
 
-    /* ---------- кнопка AR ---------- */
-    // local-floor: origin на уровне пола, пользователь стартует в центре
-    document.body.appendChild(ARButton.createButton(renderer, {
-      requiredFeatures: ['local-floor']
-    }));
+    /* ---------- UI ---------- */
+    const hint = document.getElementById('hint');
+    const btn = document.getElementById('ar-btn');
 
-    renderer.xr.addEventListener('sessionstart', () => {
-      const refSpace = renderer.xr.getReferenceSpace();
-      // Сдвигаем origin вниз на 1.6 м → камера стартует на высоте 1.6 м над полом
-      const offset = new XRRigidTransform({ x: 0, y: -1.6, z: 0 });
-      renderer.xr.setReferenceSpace(refSpace.getOffsetReferenceSpace(offset));
+    /* ---------- target image ---------- */
+    // WebXR использует PNG/JPEG, а не .patt.
+    // Пытаемся загрузить /assets/hiro.png, иначе генерируем fallback.
+    async function prepareTargetImage() {
+      try {
+        const res = await fetch('/assets/hiro.png');
+        if (res.ok) return await createImageBitmap(await res.blob());
+      } catch (e) {}
+
+      // Fallback: высококонтрастное изображение прямо в коде
+      const c = document.createElement('canvas');
+      c.width = 300; c.height = 300;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, 300, 300);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(50, 50, 200, 200);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(130, 70, 40, 160);
+      ctx.fillRect(70, 130, 160, 40);
+      return await createImageBitmap(c);
+    }
+
+    let hiroBitmap = null;
+    let imageTrackingEnabled = false;
+
+    prepareTargetImage().then(bmp => {
+      hiroBitmap = bmp;
+      hint.textContent = 'Нажмите «Start AR». Камера на 1.6 м. Покажите изображение-маркер — появится сфера.';
+      btn.disabled = false;
     });
-    
-    /* ---------- цикл ---------- */
-    renderer.setAnimationLoop(() => renderer.render(scene, camera));
+
+    /* ---------- AR запуск ---------- */
+    const trackedMarkers = new Map(); // index → { anchor, sphere }
+    const sphereGeo = new THREE.SphereGeometry(0.12, 32, 32);
+    const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0.2, metalness: 0.5 });
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      hint.textContent = 'Запуск AR…';
+
+      let session;
+      try {
+        session = await navigator.xr.requestSession('immersive-ar', {
+          requiredFeatures: ['local-floor', 'image-tracking'],
+          optionalFeatures: ['anchors'],
+          trackedImages: [{ image: hiroBitmap, widthInMeters: 0.15 }]
+        });
+        imageTrackingEnabled = true;
+      } catch (e) {
+        hint.textContent = 'Image tracking не поддерживается — запуск базового AR.';
+        session = await navigator.xr.requestSession('immersive-ar', {
+          requiredFeatures: ['local-floor']
+        });
+      }
+
+      await renderer.xr.setSession(session);
+
+      // Стартовая высота 1.6 м
+      renderer.xr.addEventListener('sessionstart', () => {
+        const refSpace = renderer.xr.getReferenceSpace();
+        const offset = new XRRigidTransform({ x: 0, y: -1.6, z: 0 });
+        renderer.xr.setReferenceSpace(refSpace.getOffsetReferenceSpace(offset));
+      });
+
+      hint.textContent = imageTrackingEnabled
+        ? 'Ищу маркер… Наведите камеру на изображение'
+        : 'AR активен. Image tracking недоступен на этом устройстве.';
+    });
+
+    /* ---------- рендер-цикл ---------- */
+    renderer.setAnimationLoop((time, frame) => {
+      if (frame && imageTrackingEnabled) {
+        const refSpace = renderer.xr.getReferenceSpace();
+        if (!refSpace) {
+          renderer.render(scene, camera);
+          return;
+        }
+
+        const results = frame.getImageTrackingResults();
+
+        for (const result of results) {
+          if (result.trackingState === 'tracked' && !trackedMarkers.has(result.index)) {
+            const pose = frame.getPose(result.imageSpace, refSpace);
+            if (pose) {
+              // Создаём anchor — сфера останется на месте навсегда
+              frame.createAnchor(pose.transform, refSpace).then(anchor => {
+                const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+                scene.add(sphere);
+                trackedMarkers.set(result.index, { anchor, sphere });
+                hint.textContent = 'Маркер найден! Сфера зафиксирована в пространстве.';
+              }).catch(() => {});
+            }
+          }
+        }
+
+        // Обновляем позиции зафиксированных сфер от anchors
+        for (const { anchor, sphere } of trackedMarkers.values()) {
+          const pose = frame.getPose(anchor.anchorSpace, refSpace);
+          if (pose) {
+            const t = pose.transform;
+            sphere.position.set(t.position.x, t.position.y, t.position.z);
+            sphere.quaternion.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
+    });
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
