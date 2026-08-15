@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>AR Debug — T1</title>
+  <title>! AR Debug — T1</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     canvas { display: block; }
     #log-panel {
       position: fixed; top: 10px; right: 10px; width: 320px; max-height: 75vh;
-      background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-      border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(0,0,0,0.78); backdrop-filter: blur(8px);
+      border-radius: 12px; border: 1px solid rgba(255,255,255,0.12);
       color: #0f0; font-family: 'SF Mono', Monaco, monospace; font-size: 11px;
       line-height: 1.5; overflow-y: auto; z-index: 100;
       transition: transform .3s ease, opacity .3s ease;
@@ -46,11 +46,19 @@
       color: #fff; font-size: 13px; pointer-events: none; z-index: 40;
       text-shadow: 0 1px 4px rgba(0,0,0,0.9); padding: 0 20px;
     }
+    /* превью загруженного target */
+    #target-preview {
+      position: fixed; bottom: 90px; left: 12px; width: 80px; height: 80px;
+      border-radius: 8px; border: 2px solid rgba(255,255,255,0.3);
+      background: rgba(0,0,0,0.5); object-fit: cover; z-index: 60;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <button id="log-toggle">LOG</button>
   <div id="log-panel"></div>
+  <img id="target-preview" alt="target">
   <div id="hint">Инициализация…</div>
   <div id="ctrl">
     <button id="btn-ar" disabled>Start AR</button>
@@ -87,6 +95,7 @@
       logPanel.scrollTop = logPanel.scrollHeight;
       console.log(`[${type||'log'}] ${msg}`);
     }
+    log('BOOT', 'ok');
 
     /* ---------- three.js setup ---------- */
     const scene = new THREE.Scene();
@@ -118,19 +127,9 @@
       const c = new THREE.Mesh(cubeGeo,m); c.position.set(...pos); scene.add(c);
     });
 
-    /* ---------- target image: assets/T1.jpg ---------- */
-    async function makeTargetBitmap() {
-      try {
-        const res = await fetch('/assets/T1.jpg');
-        if (res.ok) {
-          const blob = await res.blob();
-          const bmp = await createImageBitmap(blob);
-          log('Loaded /assets/T1.jpg ('+bmp.width+'x'+bmp.height+')', 'ok');
-          return bmp;
-        }
-      } catch(e) { log('Fetch /assets/T1.jpg failed: '+e.message, 'err'); }
-
-      // Fallback: нарисуем что-то похожее, если файл не найден
+    /* ---------- target image loader ---------- */
+    async function makeGeneratedBitmap() {
+      log('Generating fallback bitmap...', 'warn');
       const c = document.createElement('canvas');
       c.width = 512; c.height = 512;
       const ctx = c.getContext('2d');
@@ -154,8 +153,51 @@
       }
       const blob = await new Promise(res => c.toBlob(res, 'image/png'));
       const bmp = await createImageBitmap(blob);
-      log('Generated fallback bitmap 512x512', 'warn');
+      log('Fallback bitmap 512x512 ready', 'ok');
       return bmp;
+    }
+
+    async function loadTargetImage(src) {
+      log('Loading target from: ' + src, 'info');
+
+      // Попытка 1: fetch + createImageBitmap
+      try {
+        log('Trying fetch...', 'info');
+        const res = await fetch(src);
+        log('Fetch status: ' + res.status + ' ' + res.statusText, res.ok ? 'ok' : 'warn');
+        if (res.ok) {
+          const blob = await res.blob();
+          log('Blob: size=' + blob.size + ' type=' + blob.type, 'info');
+          const bmp = await createImageBitmap(blob);
+          log('Bitmap from fetch: ' + bmp.width + 'x' + bmp.height, 'ok');
+          return { bmp, source: 'fetch' };
+        }
+      } catch(e) {
+        log('Fetch failed: ' + e.message, 'err');
+      }
+
+      // Попытка 2: Image() -> canvas -> toBlob -> createImageBitmap
+      log('Trying Image() loader...', 'warn');
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          log('Image loaded: ' + img.width + 'x' + img.height, 'ok');
+          const c = document.createElement('canvas');
+          c.width = img.width; c.height = img.height;
+          c.getContext('2d').drawImage(img, 0, 0);
+          c.toBlob(async (blob) => {
+            const bmp = await createImageBitmap(blob);
+            log('Bitmap from Image(): ' + bmp.width + 'x' + bmp.height, 'ok');
+            resolve({ bmp, source: 'image' });
+          }, 'image/png');
+        };
+        img.onerror = () => {
+          log('Image() failed', 'err');
+          resolve(null);
+        };
+        img.src = src;
+      });
     }
 
     let targetBitmap = null;
@@ -166,12 +208,30 @@
     const btnAr = document.getElementById('btn-ar');
     const btnTest = document.getElementById('btn-test');
     const hint = document.getElementById('hint');
+    const preview = document.getElementById('target-preview');
 
-    makeTargetBitmap().then(bmp => {
-      targetBitmap = bmp;
-      hint.textContent = 'Нажмите «Start AR». Камера на 1.6 м. Покажите T1.jpg.';
+    // Загружаем с ./assets/T1.jpg (относительный путь — надёжнее)
+    loadTargetImage('./assets/T1.jpg').then(async (result) => {
+      if (result && result.bmp) {
+        targetBitmap = result.bmp;
+        log('Target ready via ' + result.source, 'ok');
+        // Показываем превью
+        preview.src = './assets/T1.jpg';
+        preview.style.display = 'block';
+      } else {
+        log('All loaders failed, using generated fallback', 'err');
+        targetBitmap = await makeGeneratedBitmap();
+        // Для превью рисуем fallback на canvas
+        const c = document.createElement('canvas');
+        c.width = 128; c.height = 128;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0,0,128,128);
+        ctx.fillStyle = '#ff0055'; ctx.fillRect(32,32,64,64);
+        preview.src = c.toDataURL();
+        preview.style.display = 'block';
+      }
+      hint.textContent = 'Нажмите «Start AR». Камера на 1.6 м. Покажите картинку.';
       btnAr.disabled = false;
-      log('Target bitmap ready', 'ok');
     });
 
     /* ---------- spheres & anchors ---------- */
@@ -191,7 +251,7 @@
       if(!supported){ hint.textContent='immersive-ar не поддерживается'; return; }
 
       try {
-        log('Requesting session... optionalFeatures:[image-tracking,anchors]', 'info');
+        log('Requesting session...', 'info');
         xrSession = await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: ['local-floor'],
           optionalFeatures: ['image-tracking', 'anchors'],
@@ -213,13 +273,13 @@
       log('image-tracking active: '+imageTrackingEnabled, imageTrackingEnabled?'ok':'warn');
 
       let baseRef = await xrSession.requestReferenceSpace('local-floor');
-      const offset = new XRRigidTransform({x:0,y:1.6,z:0});
+      const offset = new XRRigidTransform({x:0,y:-1.6,z:0});
       xrRefSpace = baseRef.getOffsetReferenceSpace(offset);
       renderer.xr.setReferenceSpace(xrRefSpace);
       log('RefSpace: local-floor + Y=1.6m', 'ok');
 
       hint.textContent = imageTrackingEnabled
-        ? 'AR активен. Наведите на T1.jpg (реальный размер ~20 см).'
+        ? 'AR активен. Наведите на картинку (реальный размер ~20 см).'
         : 'AR активен. Image-tracking НЕ включён — используйте «Test Anchor».';
       btnTest.disabled = false;
 
@@ -289,7 +349,7 @@
                     scene.add(sph);
                     trackedMarkers.set(idx, {anchor, sphere:sph});
                     log('['+idx+'] Anchor + sphere CREATED', 'ok');
-                    hint.textContent = 'T1 найден! Сфера зафиксирована.';
+                    hint.textContent = 'Картинка найдена! Сфера зафиксирована.';
                   }).catch(err=>{
                     log('['+idx+'] Anchor failed: '+err.message, 'err');
                   });
