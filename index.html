@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>1 AR Debug</title>
+  <title>AR Debug — T1</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -118,73 +118,47 @@
       const c = new THREE.Mesh(cubeGeo,m); c.position.set(...pos); scene.add(c);
     });
 
-    /* ---------- target image (high detail for WebXR image-tracking) ---------- */
+    /* ---------- target image: assets/T1.jpg ---------- */
     async function makeTargetBitmap() {
-      // Пробуем загрузить внешний PNG
       try {
-        const res = await fetch('/assets/hiro.png');
+        const res = await fetch('/assets/T1.jpg');
         if (res.ok) {
           const blob = await res.blob();
           const bmp = await createImageBitmap(blob);
-          log('Loaded external /assets/hiro.png ('+bmp.width+'x'+bmp.height+')', 'ok');
+          log('Loaded /assets/T1.jpg ('+bmp.width+'x'+bmp.height+')', 'ok');
           return bmp;
         }
-      } catch(e) { log('External hiro.png not found, using generated target', 'warn'); }
+      } catch(e) { log('Fetch /assets/T1.jpg failed: '+e.message, 'err'); }
 
-      // Генерируем детализированное изображение (WebXR image-tracking требует natural features)
+      // Fallback: нарисуем что-то похожее, если файл не найден
       const c = document.createElement('canvas');
       c.width = 512; c.height = 512;
       const ctx = c.getContext('2d');
-
-      // Фон с шумом
-      ctx.fillStyle = '#e8e8e8';
-      ctx.fillRect(0,0,512,512);
-      for(let i=0;i<8000;i++){
-        ctx.fillStyle = Math.random()>0.5?'#fff':'#ddd';
+      ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0,0,512,512);
+      for(let i=0;i<6000;i++){
+        ctx.fillStyle = Math.random()>0.5?'#fff':'#e0e0e0';
         ctx.fillRect(Math.random()*512,Math.random()*512,2,2);
       }
-
-      // Геометрия — хорошие фичи для трекинга
-      const shapes = [
-        ()=>{ ctx.beginPath(); ctx.arc(Math.random()*512,Math.random()*512,Math.random()*30+15,0,Math.PI*2); ctx.fill(); },
-        ()=>{ ctx.fillRect(Math.random()*512,Math.random()*512,Math.random()*60+20,Math.random()*60+20); },
-        ()=>{ ctx.beginPath(); ctx.moveTo(Math.random()*512,Math.random()*512); ctx.lineTo(Math.random()*512,Math.random()*512); ctx.lineTo(Math.random()*512,Math.random()*512); ctx.fill(); }
-      ];
-      for(let i=0;i<60;i++){
-        ctx.fillStyle = `hsl(${Math.random()*360},75%,45%)`;
-        shapes[Math.floor(Math.random()*shapes.length)]();
+      for(let i=0;i<40;i++){
+        ctx.fillStyle = `hsl(${Math.random()*360},70%,50%)`;
+        ctx.beginPath();
+        ctx.arc(Math.random()*512,Math.random()*512,Math.random()*25+10,0,Math.PI*2);
+        ctx.fill();
       }
-
-      // Толстые линии
-      for(let i=0;i<30;i++){
-        ctx.strokeStyle = `hsl(${Math.random()*360},80%,30%)`;
-        ctx.lineWidth = Math.random()*6+3;
+      ctx.strokeStyle = '#333'; ctx.lineWidth = 4;
+      for(let i=0;i<20;i++){
         ctx.beginPath();
         ctx.moveTo(Math.random()*512,Math.random()*512);
         ctx.lineTo(Math.random()*512,Math.random()*512);
         ctx.stroke();
       }
-
-      // Центральный маркер для визуального ориентира
-      ctx.fillStyle = '#000';
-      ctx.beginPath(); ctx.arc(256,256,60,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(256,256,40,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#ff0055';
-      ctx.beginPath(); ctx.arc(256,256,20,0,Math.PI*2); ctx.fill();
-
-      // Рамка
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 8;
-      ctx.strokeRect(20,20,472,472);
-
-      // Конвертируем в ImageBitmap через Blob (более надёжно для WebXR)
       const blob = await new Promise(res => c.toBlob(res, 'image/png'));
       const bmp = await createImageBitmap(blob);
-      log('Generated target bitmap 512x512 via Blob', 'ok');
+      log('Generated fallback bitmap 512x512', 'warn');
       return bmp;
     }
 
-    let hiroBitmap = null;
+    let targetBitmap = null;
     let imageTrackingEnabled = false;
     let xrSession = null;
     let xrRefSpace = null;
@@ -194,10 +168,10 @@
     const hint = document.getElementById('hint');
 
     makeTargetBitmap().then(bmp => {
-      hiroBitmap = bmp;
-      hint.textContent = 'Нажмите «Start AR». Камера на 1.6 м.';
+      targetBitmap = bmp;
+      hint.textContent = 'Нажмите «Start AR». Камера на 1.6 м. Покажите T1.jpg.';
       btnAr.disabled = false;
-      log('Target bitmap ready. Size: '+bmp.width+'x'+bmp.height, 'ok');
+      log('Target bitmap ready', 'ok');
     });
 
     /* ---------- spheres & anchors ---------- */
@@ -216,13 +190,12 @@
       log('immersive-ar supported: '+supported, supported?'ok':'err');
       if(!supported){ hint.textContent='immersive-ar не поддерживается'; return; }
 
-      // Пробуем с image-tracking как optional + trackedImages
       try {
-        log('Requesting session... optionalFeatures:[local-floor,image-tracking,anchors]', 'info');
+        log('Requesting session... optionalFeatures:[image-tracking,anchors]', 'info');
         xrSession = await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: ['local-floor'],
           optionalFeatures: ['image-tracking', 'anchors'],
-          trackedImages: [{ image: hiroBitmap, widthInMeters: 0.2 }]
+          trackedImages: [{ image: targetBitmap, widthInMeters: 0.2 }]
         });
       } catch(e) {
         log('Session request FAILED: '+e.message, 'err');
@@ -234,13 +207,11 @@
       await renderer.xr.setSession(xrSession);
       log('Renderer session set', 'ok');
 
-      // Проверяем, включилось ли image-tracking
       const enabled = xrSession.enabledFeatures || [];
       log('enabledFeatures: ['+enabled.join(', ')+']', 'info');
       imageTrackingEnabled = enabled.includes('image-tracking');
       log('image-tracking active: '+imageTrackingEnabled, imageTrackingEnabled?'ok':'warn');
 
-      // Reference space + 1.6m offset
       let baseRef = await xrSession.requestReferenceSpace('local-floor');
       const offset = new XRRigidTransform({x:0,y:1.6,z:0});
       xrRefSpace = baseRef.getOffsetReferenceSpace(offset);
@@ -248,7 +219,7 @@
       log('RefSpace: local-floor + Y=1.6m', 'ok');
 
       hint.textContent = imageTrackingEnabled
-        ? 'AR активен. Наведите на маркер (512x512, 20 см).'
+        ? 'AR активен. Наведите на T1.jpg (реальный размер ~20 см).'
         : 'AR активен. Image-tracking НЕ включён — используйте «Test Anchor».';
       btnTest.disabled = false;
 
@@ -290,7 +261,6 @@
       frameCount++;
 
       if(frame && xrRefSpace){
-        // Камера каждые 150 кадров
         if(frameCount%150===0){
           const vp = frame.getViewerPose(xrRefSpace);
           if(vp){
@@ -299,7 +269,6 @@
           }
         }
 
-        // Image tracking
         if(imageTrackingEnabled){
           try {
             const results = frame.getImageTrackingResults();
@@ -320,7 +289,7 @@
                     scene.add(sph);
                     trackedMarkers.set(idx, {anchor, sphere:sph});
                     log('['+idx+'] Anchor + sphere CREATED', 'ok');
-                    hint.textContent = 'Маркер найден! Сфера зафиксирована.';
+                    hint.textContent = 'T1 найден! Сфера зафиксирована.';
                   }).catch(err=>{
                     log('['+idx+'] Anchor failed: '+err.message, 'err');
                   });
@@ -337,7 +306,6 @@
           }
         }
 
-        // Update anchors
         for(const {anchor, sphere} of trackedMarkers.values()){
           const pose = frame.getPose(anchor.anchorSpace, xrRefSpace);
           if(pose){
