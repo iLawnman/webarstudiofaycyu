@@ -86,8 +86,8 @@
 
     renderer.xr.addEventListener('sessionstart', () => {
       const refSpace = renderer.xr.getReferenceSpace();
-      // Сдвигаем origin вверх на 1.6 м → камера стартует на высоте 1.6 м над полом
-      const offset = new XRRigidTransform({ x: 0, y: 1.6, z: 0 });
+      // Сдвигаем origin вниз на 1.6 м → камера стартует на высоте 1.6 м над полом
+      const offset = new XRRigidTransform({ x: 0, y: -1.6, z: 0 });
       renderer.xr.setReferenceSpace(refSpace.getOffsetReferenceSpace(offset));
     });
     
