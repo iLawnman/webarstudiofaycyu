@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ru">
-<head> fetch
+<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>4 WebXR ARScene: Калибровка и Постройка</title>
+  <title>WebXR ARScene (WebGL)</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -38,15 +38,13 @@
       pointer-events: auto; padding: 12px 24px; font-size: 15px;
       border: none; border-radius: 10px; font-weight: 600; cursor: pointer;
       background: #fff; color: #000; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      transition: all 0.2s ease;
     }
     #ctrl button:disabled { opacity: .45; cursor: not-allowed; }
     #ctrl button.secondary { background: rgba(255,255,255,0.15); color: #fff; }
-    #ctrl button.success { background: #00ff88; color: #000; }
     #hint {
       position: fixed; top: 50px; left: 0; width: 100%; text-align: center;
-      color: #fff; font-size: 14px; pointer-events: none; z-index: 40;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.9); padding: 0 20px; font-weight: 500;
+      color: #fff; font-size: 13px; pointer-events: none; z-index: 40;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9); padding: 0 20px;
     }
     #target-preview {
       position: fixed; bottom: 90px; left: 12px; width: 80px; height: 80px;
@@ -61,10 +59,9 @@
   <div id="log-panel"></div>
   <img id="target-preview" alt="target">
   <div id="hint">Инициализация…</div>
-  
   <div id="ctrl">
-    <button id="btn-calibrate" disabled>Калибровка</button>
-    <button id="btn-ar" class="secondary" disabled>Запустить AR</button>
+    <button id="btn-ar" disabled>Start AR</button>
+    <button id="btn-test" class="secondary" disabled>Test Anchor</button>
   </div>
 
   <script type="importmap">

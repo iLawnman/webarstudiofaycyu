@@ -1,149 +1,124 @@
 import { UI } from './ui.js';
+import { ImageRecognition } from './recognition.js';
 import { ARScene } from './arscene.js';
-import { CalibrationManager } from './calibration.js';
-import { RecognitionManager } from './recognition.js';
 
 export class App {
   constructor() {
     this.ui = new UI();
-    this.arScene = null;
-    this.calibration = null;
-    this.recognition = null;
+    this.recognition = new ImageRecognition(this.ui);
+    this.arScene = new ARScene(this.ui);
 
     this.xrSession = null;
-    this.xrRefSpace = null;
-    this.isCalibrated = false;
-    this.isSceneReady = false;
+    this.imageTrackingEnabled = false;
     this.frameCount = 0;
+
+    // Важно: задаём reference space ДО старта сессии.
+    // Three.js запросит local-floor и привяжет (0,0,0) к полу.
+    this.arScene.renderer.xr.setReferenceSpaceType('local-floor');
 
     this.init();
   }
 
   async init() {
-    try {
-      this.ui.log('App init...', 'info');
+    this.ui.log('App init (WebGL / Three.js WebXR)...', 'info');
+    await this.recognition.init();
+    this.ui.onStartAR(() => this.startAR());
+    this.ui.onTestAnchor(() => this.testAnchor());
 
-      this.arScene = new ARScene(this.ui);
-      this.calibration = new CalibrationManager(this.ui, this.arScene);
-      this.recognition = new RecognitionManager(this.ui);
-
-      if (!navigator.xr) {
-        this.ui.setHint('WebXR не поддерживается');
-        return;
-      }
-
-      const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
-      if (!supported) {
-        this.ui.setHint('Режим immersive-ar не поддерживается');
-        return;
-      }
-
-      await this.recognition.initTarget('./assets/T1.jpg');
-
-      this.ui.enableCalibrateButton(() => this.startCalibration());
-      this.ui.setHint('Нажмите «Калибровка» для старта');
-    } catch (err) {
-      if (this.ui) this.ui.log('Init error: ' + err.message, 'err');
-    }
+    // Анимационный цикл WebGLRenderer
+    this.arScene.renderer.setAnimationLoop((timestamp, frame) => {
+      this.onXRFrame(timestamp, frame);
+    });
   }
 
-  async startCalibration() {
-    this.ui.disableCalibrateButton();
-    this.ui.log('>>> Запуск калибровки', 'info');
-
-    try {
-      const sessionInit = {
-        requiredFeatures: ['hit-test', 'local-floor'],
-        optionalFeatures: ['dom-overlay'],
-        domOverlay: { root: document.body }
-      };
-
-      this.xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
-      await this.arScene.gl.makeXRCompatible();
-
-      this.xrSession.updateRenderState({
-        baseLayer: new XRWebGLLayer(this.xrSession, this.arScene.gl)
-      });
-
-      this.xrRefSpace = await this.xrSession.requestReferenceSpace('local-floor');
-
-      this.xrSession.addEventListener('end', () => {
-        this.ui.log('Сессия WebXR завершена', 'warn');
-        this.resetState();
-      });
-
-      // Запускаем главный рендер-цикл
-      this.xrSession.requestAnimationFrame((time, frame) => this.onXRFrame(time, frame));
-
-      // Запускаем обработку калибровки
-      const floorMatrix = await this.calibration.startCalibration(this.xrSession, this.xrRefSpace);
-
-      if (floorMatrix) {
-        this.isCalibrated = true;
-        this.arScene.setFloor(floorMatrix);
-        
-        this.ui.log('Уровень пола зафиксирован', 'ok');
-        this.ui.setHint('Пол установлен! Нажмите «Запустить AR»');
-        this.ui.enableArButton(() => this.startARScene());
-      }
-
-    } catch (err) {
-      this.ui.log('Ошибка калибровки: ' + err.message, 'err');
-      this.ui.enableCalibrateButton(() => this.startCalibration());
-    }
-  }
-
-  startARScene() {
+  async startAR() {
     this.ui.disableArButton();
-    this.isSceneReady = true;
-    this.ui.setHint('AR Сцена активна. Ищите маркер.');
-    this.ui.log('Основной режим AR включен', 'ok');
+    this.ui.log('>>> Start AR clicked', 'info');
+
+    if (!navigator.xr) {
+      this.ui.log('navigator.xr missing', 'err');
+      this.ui.setHint('WebXR не поддерживается');
+      this.ui.enableArButton();
+      return;
+    }
+
+    const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
+    if (!supported) {
+      this.ui.setHint('immersive-ar не поддерживается');
+      this.ui.enableArButton();
+      return;
+    }
+
+    const sessionInit = {
+      requiredFeatures: ['local-floor'],
+      optionalFeatures: ['image-tracking', 'dom-overlay'],
+      trackedImages: [{
+        image: this.recognition.targetBitmap,
+        widthInMeters: 0.2
+      }],
+      domOverlay: { root: document.body }
+    };
+
+    try {
+      this.xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
+    } catch (e) {
+      this.ui.log('Session with dom-overlay failed, retrying without it...', 'warn');
+      try {
+        this.xrSession = await navigator.xr.requestSession('immersive-ar', {
+          requiredFeatures: ['local-floor'],
+          optionalFeatures: ['image-tracking'],
+          trackedImages: [{
+            image: this.recognition.targetBitmap,
+            widthInMeters: 0.2
+          }]
+        });
+      } catch (e2) {
+        this.ui.log('Session request FAILED: ' + e2.message, 'err');
+        this.ui.setHint('Ошибка запуска AR: ' + e2.message);
+        this.ui.enableArButton();
+        return;
+      }
+    }
+
+    await this.arScene.renderer.xr.setSession(this.xrSession);
+    this.ui.log('Renderer session set (WebGL + local-floor)', 'ok');
+    this.imageTrackingEnabled = true;
+    this.ui.enableTestButton();
+
+    this.xrSession.addEventListener('end', () => {
+      this.ui.log('Session ended', 'warn');
+      this.imageTrackingEnabled = false;
+      this.xrSession = null;
+      this.frameCount = 0;
+      this.ui.enableArButton();
+      this.ui.disableTestButton();
+    });
   }
 
-  onXRFrame(time, frame) {
-    if (!this.xrSession) return;
+  testAnchor() {
+    this.ui.log('Test Anchor pressed (manual)', 'info');
+    // Можно добавить ручное создание якоря по позиции камеры при необходимости
+  }
 
-    this.xrSession.requestAnimationFrame((t, f) => this.onXRFrame(t, f));
+  onXRFrame(timestamp, frame) {
+    if (!frame) {
+      this.arScene.render();
+      return;
+    }
+
     this.frameCount++;
 
-    const pose = frame.getViewerPose(this.xrRefSpace);
-    if (!pose) return;
-
-    // 1. Обновление калибровки (хитрейст кружка)
-    if (this.calibration.isCalibrating) {
-      this.calibration.update(frame, this.xrRefSpace);
+    if (this.imageTrackingEnabled) {
+      const refSpace = this.arScene.renderer.xr.getReferenceSpace();
+      if (refSpace) {
+        this.recognition.processTracking(frame, refSpace, this.frameCount, this.arScene);
+        this.recognition.updateAnchors(frame, refSpace);
+      }
     }
 
-    // 2. Распознавание и постройка при активной сцене
-    if (this.isSceneReady) {
-      this.recognition.processTracking(frame, this.xrRefSpace, this.frameCount, this.arScene);
-      this.arScene.updateAnimation(time);
-    }
-
-    // 3. Отрисовка кадра WebGL
-    const gl = this.arScene.gl;
-    const layer = this.xrSession.renderState.baseLayer;
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    for (const view of pose.views) {
-      const viewport = layer.getViewport(view);
-      gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-      this.arScene.renderView(view.projectionMatrix, view.transform.inverse.matrix);
-    }
-  }
-
-  resetState() {
-    this.xrSession = null;
-    this.isSceneReady = false;
-    this.isCalibrated = false;
-    this.ui.enableCalibrateButton(() => this.startCalibration());
-    this.ui.setHint('Сессия завершена. Нажмите Калибровка.');
+    this.arScene.render();
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  new App();
-});
+// Запуск
+new App();

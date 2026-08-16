@@ -4,111 +4,77 @@ export class ARScene {
   constructor(ui) {
     this.ui = ui;
     this.scene = new THREE.Scene();
-    
-    // Корневая группа, привязанная к откалиброванному полу
-    this.floorGroup = new THREE.Group();
-    this.scene.add(this.floorGroup);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+    // WebGLRenderer — чистый WebGL-контекст под WebXR
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance'
+    });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.gl = this.renderer.getContext();
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.xr.enabled = true;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.camera = new THREE.PerspectiveCamera();
-    this.cubesGroup = null;
+    document.body.appendChild(this.renderer.domElement);
 
-    this.initLights();
+    this.setupLighting();
+    this.setupStaticFloor();
+
+    window.addEventListener('resize', () => this.onResize());
   }
 
-  initLights() {
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-    hemiLight.position.set(0, 10, 0);
-    this.scene.add(hemiLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(2, 5, 2);
-    this.scene.add(dirLight);
+  onResize() {
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
-  // Применяем зафиксированную матрицу калиброванного пола
-  setFloor(floorMatrix) {
-    this.floorGroup.matrix.copy(floorMatrix);
-    this.floorGroup.matrixAutoUpdate = false;
+  setupLighting() {
+    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+    light.position.set(0, 2, 0);
+    this.scene.add(light);
 
-    // Отображение сетки на установленном полу
-    const grid = new THREE.GridHelper(2, 10, 0x00ff88, 0x444444);
-    this.floorGroup.add(grid);
-
-    // Спавн кубов по углам
-    this.spawnCornerCubes();
-
-    this.ui.log('Пол зафиксирован. Кубы размещены по углам.', 'ok');
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(1, 3, 2);
+    this.scene.add(dir);
   }
 
-  // Создание и анимация 4 кубов по углам квадратной области (1x1 м)
-  spawnCornerCubes() {
-    if (this.cubesGroup) this.floorGroup.remove(this.cubesGroup);
+  setupStaticFloor() {
+    // local-floor: Y = 0 — физический пол
+    const gridHelper = new THREE.GridHelper(10, 20, 0x00ff00, 0x444444);
+    gridHelper.position.set(0, 0, 0);
+    this.scene.add(gridHelper);
 
-    this.cubesGroup = new THREE.Group();
-    this.floorGroup.add(this.cubesGroup);
+    // Тестовый куб на полу
+    const boxGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+    const boxMat = new THREE.MeshNormalMaterial();
+    const box = new THREE.Mesh(boxGeo, boxMat);
+    box.position.set(0, 0.1, -1);
+    this.scene.add(box);
+  }
 
-    const cubeSize = 0.15; // 15см
-    const boxGeo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-    const boxMat = new THREE.MeshStandardMaterial({ 
-      color: 0x00aeff, 
-      roughness: 0.3,
-      metalness: 0.2
+  createSphereMesh(color = 0xff00ff) {
+    const geo = new THREE.SphereGeometry(0.08, 24, 24);
+    const mat = new THREE.MeshStandardMaterial({
+      color,
+      metalness: 0.3,
+      roughness: 0.4,
+      emissive: color,
+      emissiveIntensity: 0.15
     });
-
-    // Углы квадрата со стороной 1 метр (+-0.5м от центра калибровки)
-    const corners = [
-      [-0.5, -0.5],
-      [ 0.5, -0.5],
-      [-0.5,  0.5],
-      [ 0.5,  0.5]
-    ];
-
-    corners.forEach(([x, z], index) => {
-      const cube = new THREE.Mesh(boxGeo, boxMat);
-      
-      // Ставим куб точно НА пол (высота/2)
-      cube.position.set(x, cubeSize / 2, z);
-      cube.scale.set(0, 0, 0); // Начинаем с 0 для анимации
-      
-      this.cubesGroup.add(cube);
-
-      // Анимация появления кубов
-      setTimeout(() => {
-        let progress = 0;
-        const interval = setInterval(() => {
-          progress += 0.1;
-          cube.scale.set(progress, progress, progress);
-          if (progress >= 1) {
-            cube.scale.set(1, 1, 1);
-            clearInterval(interval);
-          }
-        }, 16);
-      }, index * 150);
-    });
+    const mesh = new THREE.Mesh(geo, mat);
+    return mesh;
   }
 
-  updateAnimation(time) {
-    // Вращение кубов для наглядности активной сцены
-    if (this.cubesGroup) {
-      this.cubesGroup.children.forEach((cube) => {
-        cube.rotation.y += 0.01;
-      });
-    }
+  updateWorldMatrixFromPose(matrixArray) {
+    // Зарезервировано: если нужно двигать всю сцену относительно маркера
+    // (сейчас якоря создаются через createAnchor — предпочтительнее)
   }
 
-  add(object) { this.scene.add(object); }
-  remove(object) { this.scene.remove(object); }
-
-  renderView(projectionMatrix, viewMatrix) {
-    this.camera.projectionMatrix.fromArray(projectionMatrix);
-    this.camera.matrixWorldInverse.fromArray(viewMatrix);
-    this.camera.matrixWorld.copy(this.camera.matrixWorldInverse).invert();
-
+  render() {
     this.renderer.render(this.scene, this.camera);
   }
 }
