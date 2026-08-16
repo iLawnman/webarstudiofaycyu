@@ -10,58 +10,60 @@ export class CalibrationManager {
     this.lastRotation = null;
     this.totalAngleCovered = 0;
     this.totalDistanceCovered = 0;
-    
     this.onCompleteCallback = null;
+    
+    // Создаем UI синхронно
     this.createUIOverlay();
   }
 
   createUIOverlay() {
-    if (document.getElementById('ar-calibration-overlay')) return;
+    let container = document.getElementById('ar-calibration-overlay');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'ar-calibration-overlay';
+      container.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0, 0, 0, 0.4);
+        display: none; flex-direction: column; align-items: center; justify-content: center;
+        z-index: 99999; pointer-events: none; color: #ffffff; text-align: center; padding: 20px;
+        box-sizing: border-box; font-family: sans-serif;
+      `;
 
-    this.container = document.createElement('div');
-    this.container.id = 'ar-calibration-overlay';
-    this.container.style.cssText = `
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0, 0, 0, 0.4);
-      display: none; flex-direction: column; align-items: center; justify-content: center;
-      z-index: 9999; pointer-events: none; color: #ffffff; text-align: center; padding: 20px;
-      box-sizing: border-box;
-    `;
-
-    this.container.innerHTML = `
-      <div style="width: 80px; height: 80px; margin-bottom: 20px;">
-        <svg viewBox="0 0 100 100" class="phone-anim" style="width: 100%; height: 100%;">
-          <rect x="25" y="15" width="50" height="70" rx="8" fill="none" stroke="#ffffff" stroke-width="4"/>
-          <circle cx="50" cy="75" r="3" fill="#ffffff"/>
-          <path d="M 10,50 Q 50,20 90,50" fill="none" stroke="#00aaff" stroke-width="4" stroke-dasharray="6,6"/>
-        </svg>
-      </div>
-      <div id="calib-text" style="font-size: 15px; font-weight: 500; margin-bottom: 15px;">
-        Медленно поводите телефоном для сканирования пола
-      </div>
-      <div style="width: 180px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden;">
-        <div id="calib-progress-bar" style="width: 0%; height: 100%; background: #00ff88; transition: width 0.1s linear;"></div>
-      </div>
-    `;
+      container.innerHTML = `
+        <div style="width: 70px; height: 70px; margin-bottom: 15px;">
+          <svg viewBox="0 0 100 100" class="phone-anim" style="width: 100%; height: 100%;">
+            <rect x="25" y="15" width="50" height="70" rx="8" fill="none" stroke="#ffffff" stroke-width="4"/>
+            <circle cx="50" cy="75" r="3" fill="#ffffff"/>
+            <path d="M 10,50 Q 50,20 90,50" fill="none" stroke="#00aaff" stroke-width="4" stroke-dasharray="6,6"/>
+          </svg>
+        </div>
+        <div id="calib-text" style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">
+          Поводите камерой из стороны в сторону...
+        </div>
+        <div style="width: 160px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden;">
+          <div id="calib-progress-bar" style="width: 0%; height: 100%; background: #00ff88;"></div>
+        </div>
+      `;
+      document.body.appendChild(container);
+    }
 
     if (!document.getElementById('calib-anim-style')) {
       const style = document.createElement('style');
       style.id = 'calib-anim-style';
       style.textContent = `
         @keyframes phoneScan {
-          0% { transform: rotate(-15deg) translateX(-10px); }
-          50% { transform: rotate(15deg) translateX(10px); }
-          100% { transform: rotate(-15deg) translateX(-10px); }
+          0% { transform: rotate(-12deg) translateX(-8px); }
+          50% { transform: rotate(12deg) translateX(8px); }
+          100% { transform: rotate(-12deg) translateX(-8px); }
         }
         .phone-anim { animation: phoneScan 2s ease-in-out infinite; }
       `;
       document.head.appendChild(style);
     }
 
-    document.body.appendChild(this.container);
-
-    this.progressBar = this.container.querySelector('#calib-progress-bar');
-    this.textElement = this.container.querySelector('#calib-text');
+    this.container = container;
+    this.progressBar = container.querySelector('#calib-progress-bar');
+    this.textElement = container.querySelector('#calib-text');
   }
 
   start(onComplete) {
@@ -80,12 +82,18 @@ export class CalibrationManager {
   update(frame, xrRefSpace) {
     if (!this.isCalibrating || !frame || !xrRefSpace) return;
 
-    const pose = frame.getViewerPose(xrRefSpace);
+    // Безопасное получение pose
+    let pose = null;
+    try {
+      pose = frame.getViewerPose(xrRefSpace);
+    } catch (e) {
+      return;
+    }
+
     if (!pose) return;
 
-    // Быстрый выход, если позиция все еще эмулируется системой
     if (pose.emulatedPosition) {
-      if (this.textElement) this.textElement.textContent = 'Поведите камерой над полом...';
+      if (this.textElement) this.textElement.textContent = 'Сканируем поверхность пола...';
       return;
     }
 
@@ -99,12 +107,12 @@ export class CalibrationManager {
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const dRot = Math.abs(rot.y - this.lastRotation.y);
 
-      if (dist > 0.002) this.totalDistanceCovered += dist;
-      if (dRot > 0.002) this.totalAngleCovered += dRot;
+      if (dist > 0.001) this.totalDistanceCovered += dist;
+      if (dRot > 0.001) this.totalAngleCovered += dRot;
 
-      // Ускоренный набор прогресса калибровки для защиты от зависаний
-      const distProgress = Math.min(1, this.totalDistanceCovered / 0.4);
-      const rotProgress = Math.min(1, this.totalAngleCovered / 0.3);
+      // Накопление прогресса
+      const distProgress = Math.min(1, this.totalDistanceCovered / 0.3);
+      const rotProgress = Math.min(1, this.totalAngleCovered / 0.25);
 
       this.progress = Math.floor(((distProgress + rotProgress) / 2) * 100);
       if (this.progressBar) this.progressBar.style.width = `${this.progress}%`;
@@ -122,7 +130,11 @@ export class CalibrationManager {
     if (!this.isCalibrating) return;
     this.isCalibrating = false;
     if (this.container) this.container.style.display = 'none';
-    if (this.onCompleteCallback) this.onCompleteCallback();
+    if (this.onCompleteCallback) {
+      const cb = this.onCompleteCallback;
+      this.onCompleteCallback = null;
+      cb();
+    }
   }
 
   cancel() {
