@@ -5,7 +5,7 @@ import { createArTarget } from './artarget.js';
 export class ImageRecognition {
   constructor(ui) {
     this.ui = ui;
-    /** @type {Array<{bmp: ImageBitmap, name: string, src: string}>} */
+    /** @type {Array<{bmp: ImageBitmap, name: string, src: string, source: string}>} */
     this.targetBitmaps = [];
     this.trackedMarkers = new Map();
     // waitingImage  — ждём распознавания маркера
@@ -193,15 +193,34 @@ export class ImageRecognition {
     this.ui.log('state → waitingImage | markers: ' + names, 'info');
   }
 
-  /** Возвращает массив ImageBitmap для передачи в XR (image-tracking). */
+  /** Массив ImageBitmap (сырой). */
   getBitmaps() {
     return this.targetBitmaps.map(t => t.bmp);
+  }
+
+  /**
+   * Готовый массив для XRSessionInit.trackedImages.
+   * Использование:
+   *   trackedImages: recognition.getTrackedImages(0.2)
+   */
+  getTrackedImages(widthInMeters = 0.2) {
+    return this.targetBitmaps
+        .filter(t => t && t.bmp)
+        .map(t => ({
+          image: t.bmp,
+          widthInMeters
+        }));
   }
 
   /** Имя маркера по индексу из getImageTrackingResults(). */
   getMarkerName(idx) {
     const entry = this.targetBitmaps[idx];
     return entry ? entry.name : ('T' + (idx + 1));
+  }
+
+  /** Обратная совместимость (первый битмап). */
+  get targetBitmap() {
+    return this.targetBitmaps[0]?.bmp ?? null;
   }
 
   attachInput(xrSession, arScene) {

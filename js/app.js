@@ -46,13 +46,21 @@ export class App {
       return;
     }
 
+    const trackedImages = this.recognition.getTrackedImages(0.2);
+
+    if (!trackedImages.length) {
+      this.ui.log('No tracked images available', 'err');
+      this.ui.setHint('Нет загруженных маркеров');
+      this.ui.enableArButton();
+      return;
+    }
+
+    this.ui.log('trackedImages: ' + trackedImages.length, 'info');
+
     const sessionInit = {
       requiredFeatures: ['local-floor'],
       optionalFeatures: ['image-tracking', 'dom-overlay'],
-      trackedImages: [{
-        image: this.recognition.targetBitmap,
-        widthInMeters: 0.2
-      }],
+      trackedImages,
       domOverlay: { root: document.body }
     };
 
@@ -64,10 +72,7 @@ export class App {
         this.xrSession = await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: ['local-floor'],
           optionalFeatures: ['image-tracking'],
-          trackedImages: [{
-            image: this.recognition.targetBitmap,
-            widthInMeters: 0.2
-          }]
+          trackedImages
         });
       } catch (e2) {
         this.ui.log('Session request FAILED: ' + e2.message, 'err');
