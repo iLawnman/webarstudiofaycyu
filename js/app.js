@@ -31,6 +31,8 @@ class App {
     this.arScene.renderer.setAnimationLoop((time, frame) => this.onFrame(time, frame));
   }
 
+// js/app.js
+
   async startAR() {
     this.ui.disableArButton();
     this.ui.log('>>> Start AR clicked', 'info');
@@ -87,15 +89,14 @@ class App {
     }
     this.ui.log('image-tracking active: ' + this.imageTrackingEnabled, this.imageTrackingEnabled ? 'ok' : 'warn');
 
-    let baseRef = await this.xrSession.requestReferenceSpace('local-floor');
-    const offset = new XRRigidTransform({ x: 0, y: -1, z: 0 });
-    this.xrRefSpace = baseRef.getOffsetReferenceSpace(offset);
+    // Используем чистый local-floor без принудительного getOffsetReferenceSpace
+    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local-floor');
     this.arScene.renderer.xr.setReferenceSpace(this.xrRefSpace);
-    this.ui.log('RefSpace: local-floor + Y=1.6m', 'ok');
+    this.ui.log('RefSpace: local-floor active', 'ok');
 
     this.ui.setHint(this.imageTrackingEnabled
-      ? 'AR активен. Наведите на картинку (реальный размер ~20 см).'
-      : 'AR активен. Image-tracking НЕ включён — используйте «Test Anchor».');
+        ? 'AR активен. Наведите на картинку (реальный размер ~20 см).'
+        : 'AR активен. Image-tracking НЕ включён — используйте «Test Anchor».');
     this.ui.enableTestButton();
 
     this.xrSession.addEventListener('end', () => {
@@ -111,19 +112,32 @@ class App {
 
   async createInitialWorldAnchor(frame) {
     if (this.worldAnchorRequested || !frame || !this.xrRefSpace) return;
+
+    const vp = frame.getViewerPose(this.xrRefSpace);
+    if (!vp) return; // Ждём первого стабильного кадра с позиции камеры
+
     this.worldAnchorRequested = true;
 
     try {
-      // Инициализируем якорь пола в нулевой точке reference space
-      const identityTransform = new XRRigidTransform({ x: 0, y: 0, z: 0 });
-      const anchor = await frame.createAnchor(identityTransform, this.xrRefSpace);
+      // Берём позицию устройства в момент старта и ставим пол под ногами (y = 0 в пространстве local-floor)
+      const p = vp.transform.position;
+      const worldPosition = { x: p.x, y: 0, z: p.z };
+
+      // Единичная ориентация (без вращения за камерой)
+      const identityOrientation = { x: 0, y: 0, z: 0, w: 1 };
+
+      const anchorTransform = new XRRigidTransform(worldPosition, identityOrientation);
+      const anchor = await frame.createAnchor(anchorTransform, this.xrRefSpace);
+
       this.arScene.setWorldAnchor(anchor);
-      this.ui.log('World Scene Anchor established successfully', 'ok');
+      this.ui.log(`World Anchor placed at X:${p.x.toFixed(2)}, Y:0, Z:${p.z.toFixed(2)}`, 'ok');
     } catch (e) {
       this.ui.log('Failed to create World Anchor: ' + e.message, 'err');
+      // Если создание якоря не поддерживается устройством, фиксируем worldGroup вручную
+      this.arScene.worldGroup.position.set(vp.transform.position.x, 0, vp.transform.position.z);
     }
   }
-
+  
   async addTestAnchor() {
     if (!this.xrSession || !this.xrRefSpace || !this.currentFrame) {
       this.ui.log('No active frame for anchor', 'err');
