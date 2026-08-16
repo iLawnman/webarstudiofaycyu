@@ -6,37 +6,6 @@ export class RecognitionManager {
   }
 
   // Внутри метода init() в app.js:
-  async init() {
-    try {
-      this.ui.log('App init...', 'info');
-
-      this.arScene = new ARScene(this.ui);
-      this.calibration = new CalibrationManager(this.ui, this.arScene);
-      this.recognition = new RecognitionManager(this.ui);
-
-      if (!navigator.xr) {
-        this.ui.setHint('WebXR не поддерживается');
-        this.ui.log('navigator.xr missing', 'err');
-        return;
-      }
-
-      const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
-      if (!supported) {
-        this.ui.setHint('Режим immersive-ar не поддерживается');
-        this.ui.log('immersive-ar not supported', 'warn');
-        return;
-      }
-
-      // Загрузка ImageTarget из папки /assets/T1.jpg
-      await this.recognition.initTarget('./assets/T1.jpg');
-
-      this.ui.enableCalibrateButton(() => this.startCalibration());
-      this.ui.setHint('Нажмите «Калибровка» для определения уровня пола');
-    } catch (err) {
-      console.error(err);
-      if (this.ui) this.ui.log('Init error: ' + err.message, 'err');
-    }
-  }
   
   async makeGeneratedBitmap() {
     this.ui.log('Generating fallback bitmap...', 'warn');

@@ -40,8 +40,8 @@ export class App {
         return;
       }
 
-      // Предзагрузка маркера распознавания
-      await this.recognition.initTarget('./target.jpg');
+      // Загрузка ImageTarget из папки /assets/T1.jpg
+      await this.recognition.initTarget('./assets/T1.jpg');
 
       this.ui.enableCalibrateButton(() => this.startCalibration());
       this.ui.setHint('Нажмите «Калибровка» для определения уровня пола');
