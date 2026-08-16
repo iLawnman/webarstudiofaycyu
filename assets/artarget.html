@@ -1,0 +1,163 @@
+<!--
+  Declarative description of AR Target.
+  - <sphere>  → THREE.SphereGeometry
+  - <panel>   → PlaneGeometry + CanvasTexture from inner HTML
+  data-* attributes drive 3D placement (metres / degrees).
+  Content of panels is rendered to CanvasTexture.
+-->
+<template id="ar-target">
+
+  <sphere
+          name="sphere"
+          data-radius="0.01"
+          data-segments="24"
+          data-color="#ff00ff"
+          data-emissive="#ff00ff"
+          data-emissive-intensity="0.15"
+          data-metalness="0.3"
+          data-roughness="0.4"
+          data-position="0,0,0"
+  ></sphere>
+
+  <panel
+          name="textPanel"
+          data-width="0.12"
+          data-height="0.18"
+          data-position="-0.12,0,0.02"
+          data-rotation="-90,0,0"
+  >
+    <div class="panel text-panel">
+      <div class="border"></div>
+      <div class="label">MARKER</div>
+      <div class="name">{{markerName}}</div>
+      <div class="sub">AR Target</div>
+    </div>
+  </panel>
+
+  <panel
+          name="imgPanel"
+          data-width="0.12"
+          data-height="0.18"
+          data-position="0.12,0,0.02"
+          data-rotation="-90,0,0"
+  >
+    <div class="panel img-panel">
+      <div class="border"></div>
+      <div class="label">IMAGE</div>
+      <div class="placeholder-circles"></div>
+      <div class="name">{{markerName}}</div>
+    </div>
+  </panel>
+
+  <panel
+          name="okButton"
+          data-width="0.16"
+          data-height="0.06"
+          data-position="0,-0.14,0.02"
+          data-rotation="-90,0,0"
+  >
+    <div class="panel ok-panel">
+      <div class="btn">OK</div>
+    </div>
+  </panel>
+
+</template>
+
+<style>
+  .panel {
+    width: 256px;
+    height: 384px;
+    position: relative;
+    font-family: sans-serif;
+    box-sizing: border-box;
+  }
+
+  .text-panel {
+    background: rgba(10, 10, 30, 0.92);
+    color: #fff;
+  }
+  .text-panel .border {
+    position: absolute;
+    inset: 4px;
+    border: 8px solid #00ffaa;
+    pointer-events: none;
+  }
+  .text-panel .label {
+    position: absolute;
+    top: 40px;
+    left: 0; right: 0;
+    text-align: center;
+    color: #00ffaa;
+    font-weight: bold;
+    font-size: 28px;
+  }
+  .text-panel .name {
+    position: absolute;
+    top: 160px;
+    left: 0; right: 0;
+    text-align: center;
+    font-weight: bold;
+    font-size: 36px;
+  }
+  .text-panel .sub {
+    position: absolute;
+    top: 250px;
+    left: 0; right: 0;
+    text-align: center;
+    color: #aaa;
+    font-size: 20px;
+  }
+
+  .img-panel {
+    background: linear-gradient(to bottom, #1a0033, #003344);
+    color: #fff;
+  }
+  .img-panel .border {
+    position: absolute;
+    inset: 4px;
+    border: 8px solid #ff66cc;
+    pointer-events: none;
+  }
+  .img-panel .label {
+    position: absolute;
+    top: 30px;
+    left: 0; right: 0;
+    text-align: center;
+    color: #ff66cc;
+    font-weight: bold;
+    font-size: 22px;
+  }
+  .img-panel .name {
+    position: absolute;
+    bottom: 40px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 18px;
+  }
+  .img-panel .placeholder-circles {
+    position: absolute;
+    inset: 0;
+  }
+
+  .ok-panel {
+    width: 256px;
+    height: 96px;
+    background: rgba(0, 40, 20, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ok-panel .btn {
+    width: 208px;
+    height: 64px;
+    background: #00cc66;
+    border: 4px solid #00ff99;
+    border-radius: 12px;
+    color: #fff;
+    font-weight: bold;
+    font-size: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+</style>

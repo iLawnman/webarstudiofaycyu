@@ -1,195 +1,317 @@
 // js/artarget.js
 import * as THREE from 'three';
 
+const TEMPLATE_URL = '/assets/artarget.html';
+
 /**
- * Composite AR target:
- * - central sphere (r=0.01)
- * - left vertical panel  — text with marker name
- * - right vertical panel — image placeholder
- * - bottom panel         — OK button
- *
- * WebXR imageSpace: image in XY, +Z normal out of image.
- * PlaneGeometry is XY → flat on marker; rotation.x = -π/2 stands panels up.
+ * Abstract AR object builder: panels + layout come from declarative HTML.
+ * HTML is the single source of truth for panel content, size and placement.
  */
-export function createArTarget(markerName = 'T1', options = {}) {
-    const { onOk = null } = options;
+export async function createArTarget(markerName = 'T1', options = {}) {
+    const { onOk = null, templateUrl = TEMPLATE_URL } = options;
 
     const group = new THREE.Group();
     group.name = `arTarget_${markerName}`;
 
-    // --- central sphere ---
-    const sphereGeo = new THREE.SphereGeometry(0.01, 24, 24);
-    const sphereMat = new THREE.MeshStandardMaterial({
+    // --- central sphere (procedural, not in HTML) ---
+    const sphere = createSphere();
+    group.add(sphere);
+
+    const template = await loadTemplate(templateUrl);
+    const panels = template.querySelectorAll('panel');
+    const vars = { markerName: String(markerName) };
+
+    const userData = {
+        markerName,
+        sphere,
+        onOk,
+        panels: {}
+    };
+
+    for (const panelEl of panels) {
+        const mesh = await createPanelFromHtml(panelEl, vars);
+        group.add(mesh);
+        userData.panels[mesh.name] = mesh;
+        userData[mesh.name] = mesh; // legacy direct access
+        if (mesh.userData.texture) {
+            userData[`${mesh.name}Texture`] = mesh.userData.texture;
+        }
+    }
+
+    group.position.z = 0.02;
+    group.userData = userData;
+
+    return group;
+}
+
+// ─── abstract HTML → THREE ───────────────────────────────────────────────────
+
+async function loadTemplate(url) {
+    const res = await fetch(url);
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const template = doc.querySelector('#ar-target') || doc.querySelector('template');
+    if (!template) throw new Error(`No <template id="ar-target"> in ${url}`);
+
+    // inject <style> from the same document so foreignObject can use classes
+    const styleEl = doc.querySelector('style');
+    if (styleEl) {
+        template.dataset.style = styleEl.textContent;
+    }
+    return template;
+}
+
+/**
+ * Create a PlaneGeometry mesh from a <panel> element.
+ * data-width / data-height  → geometry size (metres)
+ * data-position="x,y,z"     → position
+ * data-rotation="rx,ry,rz"  → degrees → radians
+ * Inner HTML is rendered to CanvasTexture via SVG foreignObject.
+ */
+async function createPanelFromHtml(panelEl, vars = {}) {
+    const name = panelEl.getAttribute('name') || 'panel';
+    const w = parseFloat(panelEl.dataset.width) || 0.12;
+    const h = parseFloat(panelEl.dataset.height) || 0.18;
+    const pos = parseVec3(panelEl.dataset.position, [0, 0, 0.02]);
+    const rot = parseVec3(panelEl.dataset.rotation, [-90, 0, 0]).map(d => d * Math.PI / 180);
+
+    // resolve {{var}} placeholders
+    let inner = panelEl.innerHTML;
+    for (const [k, v] of Object.entries(vars)) {
+        inner = inner.replaceAll(`{{${k}}}`, v);
+    }
+
+    // canvas pixel size from CSS of the root .panel (fallback 256×384)
+    const { cssW, cssH } = measurePanelCss(panelEl);
+
+    const texture = await htmlToTexture(inner, cssW, cssH, panelEl.closest('template')?.dataset?.style || '');
+
+    const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, h),
+        new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide
+        })
+    );
+    mesh.name = name;
+    mesh.position.set(...pos);
+    mesh.rotation.set(...rot);
+    mesh.userData.texture = texture;
+
+    return mesh;
+}
+
+function measurePanelCss(panelEl) {
+    const root = panelEl.querySelector('.panel') || panelEl.firstElementChild;
+    if (!root) return { cssW: 256, cssH: 384 };
+
+    // parse width/height from style attribute or class defaults
+    const style = root.getAttribute('style') || '';
+    const wMatch = style.match(/width:\s*([\d.]+)px/);
+    const hMatch = style.match(/height:\s*([\d.]+)px/);
+
+    // hardcoded defaults that match the CSS in artarget.html
+    let cssW = wMatch ? parseFloat(wMatch[1]) : 256;
+    let cssH = hMatch ? parseFloat(hMatch[1]) : 384;
+
+    if (root.classList.contains('ok-panel')) {
+        cssW = 256;
+        cssH = 96;
+    }
+    return { cssW, cssH };
+}
+
+/**
+ * Render arbitrary HTML + CSS into a CanvasTexture (SVG foreignObject).
+ */
+function htmlToTexture(html, width, height, cssText = '') {
+    return new Promise((resolve, reject) => {
+        const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+  <foreignObject width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;margin:0;padding:0;overflow:hidden;">
+      <style>${cssText}</style>
+      ${html}
+    </div>
+  </foreignObject>
+</svg>`.trim();
+
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.needsUpdate = true;
+            resolve(tex);
+        };
+        img.onerror = (e) => {
+            URL.revokeObjectURL(url);
+            reject(e);
+        };
+        img.src = url;
+    });
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+function createSphere() {
+    const geo = new THREE.SphereGeometry(0.01, 24, 24);
+    const mat = new THREE.MeshStandardMaterial({
         color: 0xff00ff,
         metalness: 0.3,
         roughness: 0.4,
         emissive: 0xff00ff,
         emissiveIntensity: 0.15
     });
-    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+    return new THREE.Mesh(geo, mat);
+}
+
+function parseVec3(str, fallback) {
+    if (!str) return fallback.slice();
+    const parts = str.split(',').map(s => parseFloat(s.trim()));
+    return parts.length === 3 && parts.every(Number.isFinite) ? parts : fallback.slice();
+}
+
+// pure-canvas fallback (no network / no foreignObject) — kept for offline use
+export function createArTargetSync(markerName = 'T1', options = {}) {
+    const { onOk = null } = options;
+    const group = new THREE.Group();
+    group.name = `arTarget_${markerName}`;
+
+    const sphere = createSphere();
     group.add(sphere);
 
-    const panelW = 0.12;
-    const panelH = 0.18;
-    const panelOffset = 0.12;
-
-    // --- left panel: text ---
-    const textCanvas = document.createElement('canvas');
-    textCanvas.width = 256;
-    textCanvas.height = 384;
-    const tctx = textCanvas.getContext('2d');
-
-    tctx.fillStyle = 'rgba(10, 10, 30, 0.92)';
-    tctx.fillRect(0, 0, 256, 384);
-
-    tctx.strokeStyle = '#00ffaa';
-    tctx.lineWidth = 8;
-    tctx.strokeRect(4, 4, 248, 376);
-
-    tctx.fillStyle = '#00ffaa';
-    tctx.font = 'bold 28px sans-serif';
-    tctx.textAlign = 'center';
-    tctx.fillText('MARKER', 128, 60);
-
-    tctx.fillStyle = '#ffffff';
-    tctx.font = 'bold 36px sans-serif';
-    tctx.fillText(String(markerName), 128, 200);
-
-    tctx.fillStyle = '#aaaaaa';
-    tctx.font = '20px sans-serif';
-    tctx.fillText('AR Target', 128, 280);
-
-    const textTex = new THREE.CanvasTexture(textCanvas);
-    textTex.colorSpace = THREE.SRGBColorSpace;
-    textTex.needsUpdate = true;
-
-    const textPanel = new THREE.Mesh(
-        new THREE.PlaneGeometry(panelW, panelH),
-        new THREE.MeshBasicMaterial({
-            map: textTex,
-            transparent: true,
-            side: THREE.DoubleSide
-        })
-    );
-    textPanel.position.set(-panelOffset, 0, 0.02);
-    textPanel.rotation.x = -Math.PI / 2;
+    // text panel
+    const textPanel = makeCanvasPanel({
+        name: 'textPanel',
+        w: 0.12, h: 0.18,
+        pos: [-0.12, 0, 0.02],
+        rotX: -Math.PI / 2,
+        draw: (ctx, cw, ch) => {
+            ctx.fillStyle = 'rgba(10, 10, 30, 0.92)';
+            ctx.fillRect(0, 0, cw, ch);
+            ctx.strokeStyle = '#00ffaa';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(4, 4, cw - 8, ch - 8);
+            ctx.fillStyle = '#00ffaa';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('MARKER', cw / 2, 60);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 36px sans-serif';
+            ctx.fillText(String(markerName), cw / 2, 200);
+            ctx.fillStyle = '#aaaaaa';
+            ctx.font = '20px sans-serif';
+            ctx.fillText('AR Target', cw / 2, 280);
+        }
+    });
     group.add(textPanel);
 
-    // --- right panel: image placeholder ---
-    const imgCanvas = document.createElement('canvas');
-    imgCanvas.width = 256;
-    imgCanvas.height = 384;
-    const ictx = imgCanvas.getContext('2d');
-
-    const grad = ictx.createLinearGradient(0, 0, 0, 384);
-    grad.addColorStop(0, '#1a0033');
-    grad.addColorStop(1, '#003344');
-    ictx.fillStyle = grad;
-    ictx.fillRect(0, 0, 256, 384);
-
-    for (let i = 0; i < 12; i++) {
-        ictx.beginPath();
-        ictx.arc(
-            40 + Math.random() * 176,
-            40 + Math.random() * 304,
-            8 + Math.random() * 24,
-            0,
-            Math.PI * 2
-        );
-        ictx.fillStyle = `hsla(${200 + Math.random() * 80}, 70%, 55%, 0.7)`;
-        ictx.fill();
-    }
-
-    ictx.strokeStyle = '#ff66cc';
-    ictx.lineWidth = 8;
-    ictx.strokeRect(4, 4, 248, 376);
-
-    ictx.fillStyle = '#ff66cc';
-    ictx.font = 'bold 22px sans-serif';
-    ictx.textAlign = 'center';
-    ictx.fillText('IMAGE', 128, 50);
-
-    ictx.fillStyle = '#ffffff';
-    ictx.font = '18px sans-serif';
-    ictx.fillText(String(markerName), 128, 340);
-
-    const imgTex = new THREE.CanvasTexture(imgCanvas);
-    imgTex.colorSpace = THREE.SRGBColorSpace;
-    imgTex.needsUpdate = true;
-
-    const imgPanel = new THREE.Mesh(
-        new THREE.PlaneGeometry(panelW, panelH),
-        new THREE.MeshBasicMaterial({
-            map: imgTex,
-            transparent: true,
-            side: THREE.DoubleSide
-        })
-    );
-    imgPanel.position.set(panelOffset, 0, 0.02);
-    imgPanel.rotation.x = -Math.PI / 2;
+    // image panel
+    const imgPanel = makeCanvasPanel({
+        name: 'imgPanel',
+        w: 0.12, h: 0.18,
+        pos: [0.12, 0, 0.02],
+        rotX: -Math.PI / 2,
+        draw: (ctx, cw, ch) => {
+            const grad = ctx.createLinearGradient(0, 0, 0, ch);
+            grad.addColorStop(0, '#1a0033');
+            grad.addColorStop(1, '#003344');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, cw, ch);
+            for (let i = 0; i < 12; i++) {
+                ctx.beginPath();
+                ctx.arc(40 + Math.random() * 176, 40 + Math.random() * 304, 8 + Math.random() * 24, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${200 + Math.random() * 80}, 70%, 55%, 0.7)`;
+                ctx.fill();
+            }
+            ctx.strokeStyle = '#ff66cc';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(4, 4, cw - 8, ch - 8);
+            ctx.fillStyle = '#ff66cc';
+            ctx.font = 'bold 22px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('IMAGE', cw / 2, 50);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '18px sans-serif';
+            ctx.fillText(String(markerName), cw / 2, 340);
+        }
+    });
     group.add(imgPanel);
 
-    // --- bottom panel: OK button ---
-    const okW = 0.16;
-    const okH = 0.06;
-    const okCanvas = document.createElement('canvas');
-    okCanvas.width = 256;
-    okCanvas.height = 96;
-    const octx = okCanvas.getContext('2d');
-
-    octx.fillStyle = 'rgba(0, 40, 20, 0.95)';
-    octx.fillRect(0, 0, 256, 96);
-
-    octx.fillStyle = '#00cc66';
-    octx.beginPath();
-    roundRect(octx, 24, 16, 208, 64, 12);
-    octx.fill();
-
-    octx.strokeStyle = '#00ff99';
-    octx.lineWidth = 4;
-    octx.stroke();
-
-    octx.fillStyle = '#ffffff';
-    octx.font = 'bold 40px sans-serif';
-    octx.textAlign = 'center';
-    octx.textBaseline = 'middle';
-    octx.fillText('OK', 128, 48);
-
-    const okTex = new THREE.CanvasTexture(okCanvas);
-    okTex.colorSpace = THREE.SRGBColorSpace;
-    okTex.needsUpdate = true;
-
-    const okPanel = new THREE.Mesh(
-        new THREE.PlaneGeometry(okW, okH),
-        new THREE.MeshBasicMaterial({
-            map: okTex,
-            transparent: true,
-            side: THREE.DoubleSide
-        })
-    );
-    okPanel.position.set(0, -0.14, 0.02);
-    okPanel.rotation.x = -Math.PI / 2;
-    okPanel.name = 'okButton';
+    // OK button
+    const okPanel = makeCanvasPanel({
+        name: 'okButton',
+        w: 0.16, h: 0.06,
+        pos: [0, -0.14, 0.02],
+        rotX: -Math.PI / 2,
+        canvasW: 256, canvasH: 96,
+        draw: (ctx, cw, ch) => {
+            ctx.fillStyle = 'rgba(0, 40, 20, 0.95)';
+            ctx.fillRect(0, 0, cw, ch);
+            ctx.fillStyle = '#00cc66';
+            roundRectPath(ctx, 24, 16, 208, 64, 12);
+            ctx.fill();
+            ctx.strokeStyle = '#00ff99';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('OK', cw / 2, ch / 2);
+        }
+    });
     group.add(okPanel);
 
     group.position.z = 0.02;
-
     group.userData = {
         markerName,
         sphere,
         textPanel,
         imgPanel,
         okPanel,
-        textTexture: textTex,
-        imgTexture: imgTex,
-        okTexture: okTex,
+        textTexture: textPanel.userData.texture,
+        imgTexture: imgPanel.userData.texture,
+        okTexture: okPanel.userData.texture,
         onOk
     };
-
     return group;
 }
 
-function roundRect(ctx, x, y, w, h, r) {
+function makeCanvasPanel({ name, w, h, pos, rotX, canvasW = 256, canvasH = 384, draw }) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    const ctx = canvas.getContext('2d');
+    draw(ctx, canvasW, canvasH);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+
+    const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, h),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide })
+    );
+    mesh.name = name;
+    mesh.position.set(...pos);
+    mesh.rotation.x = rotX;
+    mesh.userData.texture = tex;
+    return mesh;
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + w - r, y);
     ctx.quadraticCurveTo(x + w, y, x + w, y + r);
