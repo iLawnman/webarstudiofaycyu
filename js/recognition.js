@@ -97,24 +97,22 @@ export class RecognitionManager {
   processTracking(frame, xrRefSpace, frameCount, arScene) {
     try {
       const results = frame.getImageTrackingResults();
-      // if (results.length > 0 && frameCount % 30 === 0) {
-      //   this.ui.log('Tracking results: ' + results.length, 'info');
-      // }
       for (const result of results) {
         const state = result.trackingState;
         const idx = result.index;
-        // if (frameCount % 30 === 0) this.ui.log('[' + idx + '] state=' + state, state === 'tracked' ? 'ok' : 'warn');
 
         if (state === 'tracked' && !this.trackedMarkers.has(idx)) {
           const pose = frame.getPose(result.imageSpace, xrRefSpace);
           if (pose) {
             this.ui.log('[' + idx + '] Creating anchor...', 'info');
             frame.createAnchor(pose.transform, xrRefSpace).then(anchor => {
-              const sphere = arScene.createSphereMesh(0xff00ff);
-              arScene.scene.add(sphere);
-              this.trackedMarkers.set(idx, { anchor, sphere });
-              this.ui.log('[' + idx + '] Anchor + sphere CREATED', 'ok');
-              this.ui.setHint('Картинка найдена! Сфера зафиксирована.');
+              // Чистый WebGL маркер вместо Three.js Mesh
+              const markerNode = arScene.createMarkerNode([1.0, 0.0, 1.0]); // Малиновый цвет
+              arScene.addNode(markerNode);
+              
+              this.trackedMarkers.set(idx, { anchor, node: markerNode });
+              this.ui.log('[' + idx + '] Anchor + marker CREATED', 'ok');
+              this.ui.setHint('Картинка найдена! Метка зафиксирована.');
             }).catch(err => {
               this.ui.log('[' + idx + '] Anchor failed: ' + err.message, 'err');
             });
@@ -123,7 +121,7 @@ export class RecognitionManager {
           }
         }
         if (state === 'ended' && this.trackedMarkers.has(idx)) {
-          this.ui.log('[' + idx + '] Tracking ended (sphere stays)', 'warn');
+          this.ui.log('[' + idx + '] Tracking ended (marker stays)', 'warn');
         }
       }
     } catch (e) {
@@ -132,12 +130,11 @@ export class RecognitionManager {
   }
 
   updateAnchors(frame, xrRefSpace) {
-    for (const { anchor, sphere } of this.trackedMarkers.values()) {
+    for (const { anchor, node } of this.trackedMarkers.values()) {
       const pose = frame.getPose(anchor.anchorSpace, xrRefSpace);
       if (pose) {
-        const t = pose.transform;
-        sphere.position.set(t.position.x, t.position.y, t.position.z);
-        sphere.quaternion.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
+        // Записываем матрицу из WebXR XRRigidTransform в узлы сцены
+        node.matrix.set(pose.transform.matrix);
       }
     }
   }

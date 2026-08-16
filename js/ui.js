@@ -9,13 +9,16 @@ export class UI {
     
     this.logVisible = true;
     
-    this.logToggle.addEventListener('click', () => {
-      this.logVisible = !this.logVisible;
-      this.logPanel.classList.toggle('collapsed', !this.logVisible);
-    });
+    if (this.logToggle) {
+      this.logToggle.addEventListener('click', () => {
+        this.logVisible = !this.logVisible;
+        this.logPanel.classList.toggle('collapsed', !this.logVisible);
+      });
+    }
   }
 
   log(msg, type = '') {
+    if (!this.logPanel) return;
     const div = document.createElement('div');
     div.className = 'entry ' + type;
     const now = new Date();
@@ -27,35 +30,29 @@ export class UI {
   }
 
   setHint(text) {
-    this.hint.textContent = text;
+    if (this.hint) this.hint.textContent = text;
   }
 
   setPreview(src) {
-    this.preview.src = src;
-    this.preview.style.display = 'block';
+    if (this.preview) {
+      this.preview.src = src;
+      this.preview.style.display = 'block';
+    }
   }
 
   enableArButton() {
-    this.btnAr.disabled = false;
+    if (this.btnAr) this.btnAr.disabled = false;
   }
 
   disableArButton() {
-    this.btnAr.disabled = true;
-  }
-
-  enableTestButton() {
-    this.btnTest.disabled = false;
-  }
-
-  disableTestButton() {
-    this.btnTest.disabled = true;
+    if (this.btnAr) this.btnAr.disabled = true;
   }
 
   onStartAR(handler) {
-    this.btnAr.addEventListener('click', handler);
+    if (this.btnAr) this.btnAr.addEventListener('click', handler);
   }
 
   onTestAnchor(handler) {
-    this.btnTest.addEventListener('click', handler);
+    if (this.btnTest) this.btnTest.addEventListener('click', handler);
   }
 }
