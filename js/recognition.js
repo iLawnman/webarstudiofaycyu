@@ -2,7 +2,7 @@ export class ImageRecognition {
   constructor(ui) {
     this.ui = ui;
     this.targetBitmap = null;
-    this.trackedMarkers = new Map();
+    this.trackedMarkers = new Map(); // idx -> { sphere, lastPose }
   }
 
   async makeGeneratedBitmap() {
@@ -101,47 +101,74 @@ export class ImageRecognition {
     this.ui.enableArButton();
   }
 
+  /**
+   * Стабильный путь без createAnchor.
+   * Каждый кадр берём pose из result.imageSpace — это рекомендуемый способ
+   * из Image Tracking explainer. createAnchor часто падает с
+   * "XRFrame is no longer active" / InvalidStateError.
+   */
   processTracking(frame, xrRefSpace, frameCount, arScene) {
     try {
-      const results = frame.getImageTrackingResults ? frame.getImageTrackingResults() : [];
-      for (const result of results) {
-        const state = result.trackingState;
-        const idx = result.index;
+      if (!frame.getImageTrackingResults) return;
 
-        if (state === 'tracked' && !this.trackedMarkers.has(idx)) {
-          const pose = frame.getPose(result.imageSpace, xrRefSpace);
-          if (pose) {
-            this.ui.log('[' + idx + '] Creating anchor...', 'info');
-            frame.createAnchor(pose.transform, xrRefSpace).then(anchor => {
-              const sphere = arScene.createSphereMesh(0xff00ff);
-              arScene.scene.add(sphere);
-              this.trackedMarkers.set(idx, { anchor, sphere });
-              this.ui.log('[' + idx + '] Anchor + sphere CREATED', 'ok');
-              this.ui.setHint('Картинка T1 найдена! Сфера зафиксирована.');
-            }).catch(err => {
-              this.ui.log('[' + idx + '] Anchor failed: ' + err.message, 'err');
-            });
-          } else {
-            this.ui.log('[' + idx + '] Pose is null', 'warn');
-          }
+      const results = frame.getImageTrackingResults();
+      const seen = new Set();
+
+      for (const result of results) {
+        const state = result.trackingState; // 'tracked' | 'emulated'
+        const idx = result.index;
+        seen.add(idx);
+
+        const pose = frame.getPose(result.imageSpace, xrRefSpace);
+        if (!pose) continue;
+
+        let entry = this.trackedMarkers.get(idx);
+
+        // Первый раз увидели — создаём сферу
+        if (!entry) {
+          const sphere = arScene.createSphereMesh(0xff00ff);
+          arScene.scene.add(sphere);
+          entry = { sphere, lastState: state };
+          this.trackedMarkers.set(idx, entry);
+          this.ui.log('[' + idx + '] Sphere created (state=' + state + ')', 'ok');
+          this.ui.setHint('Картинка T1 найдена! Сфера следует за маркером.');
         }
-        if (state === 'ended' && this.trackedMarkers.has(idx)) {
-          this.ui.log('[' + idx + '] Tracking ended (sphere stays)', 'warn');
+
+        // Каждый кадр обновляем позу напрямую из imageSpace
+        const t = pose.transform;
+        entry.sphere.position.set(t.position.x, t.position.y, t.position.z);
+        entry.sphere.quaternion.set(
+          t.orientation.x,
+          t.orientation.y,
+          t.orientation.z,
+          t.orientation.w
+        );
+        entry.lastState = state;
+
+        // Небольшая визуальная обратная связь
+        if (state === 'emulated') {
+          entry.sphere.scale.setScalar(0.7);
+        } else {
+          entry.sphere.scale.setScalar(1.0);
+        }
+      }
+
+      // Если маркер пропал из results — оставляем сферу на последней позе
+      for (const [idx, entry] of this.trackedMarkers) {
+        if (!seen.has(idx) && entry.lastState !== 'lost') {
+          entry.lastState = 'lost';
+          this.ui.log('[' + idx + '] Tracking lost (sphere stays at last pose)', 'warn');
         }
       }
     } catch (e) {
-      if (frameCount % 60 === 0) this.ui.log('getImageTrackingResults err: ' + e.message, 'err');
+      if (frameCount % 60 === 0) {
+        this.ui.log('getImageTrackingResults err: ' + e.message, 'err');
+      }
     }
   }
 
+  // Больше не нужен — поза обновляется внутри processTracking
   updateAnchors(frame, xrRefSpace) {
-    for (const { anchor, sphere } of this.trackedMarkers.values()) {
-      const pose = frame.getPose(anchor.anchorSpace, xrRefSpace);
-      if (pose) {
-        const t = pose.transform;
-        sphere.position.set(t.position.x, t.position.y, t.position.z);
-        sphere.quaternion.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
-      }
-    }
+    // no-op (оставлен для совместимости вызова из app.js)
   }
 }
