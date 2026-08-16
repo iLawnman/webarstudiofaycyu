@@ -97,13 +97,13 @@ export class RecognitionManager {
   processTracking(frame, xrRefSpace, frameCount, arScene) {
     try {
       const results = frame.getImageTrackingResults();
-      if (results.length > 0 && frameCount % 30 === 0) {
-        this.ui.log('Tracking results: ' + results.length, 'info');
-      }
+      // if (results.length > 0 && frameCount % 30 === 0) {
+      //   this.ui.log('Tracking results: ' + results.length, 'info');
+      // }
       for (const result of results) {
         const state = result.trackingState;
         const idx = result.index;
-        if (frameCount % 30 === 0) this.ui.log('[' + idx + '] state=' + state, state === 'tracked' ? 'ok' : 'warn');
+        // if (frameCount % 30 === 0) this.ui.log('[' + idx + '] state=' + state, state === 'tracked' ? 'ok' : 'warn');
 
         if (state === 'tracked' && !this.trackedMarkers.has(idx)) {
           const pose = frame.getPose(result.imageSpace, xrRefSpace);
