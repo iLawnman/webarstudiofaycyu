@@ -16,7 +16,7 @@ class App {
     this.frameCount = 0;
     this.worldAnchorRequested = false;
 
-    this.ui.log('BOOT', 'ok');
+    this.ui.log('BOOT 1', 'ok');
     this.init();
   }
 
