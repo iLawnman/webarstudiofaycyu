@@ -1,4 +1,6 @@
 // js/recognition.js
+import { createArTarget } from './artarget.js';
+
 export class ImageRecognition {
   constructor(ui) {
     this.ui = ui;
@@ -120,17 +122,18 @@ export class ImageRecognition {
         let entry = this.trackedMarkers.get(idx);
 
         if (!entry) {
-          const sphere = arScene.createSphereMesh(0xff00ff);
-          arScene.scene.add(sphere);
-          entry = { sphere, lastState: state };
+          const markerName = 'T' + (idx + 1);
+          const arTarget = createArTarget(markerName);
+          arScene.scene.add(arTarget);
+          entry = { arTarget, lastState: state };
           this.trackedMarkers.set(idx, entry);
-          this.ui.log('[' + idx + '] Sphere created (state=' + state + ')', 'ok');
-          this.ui.setHint('Картинка T1 найдена! Сфера следует за маркером.');
+          this.ui.log('[' + idx + '] AR Target created: ' + markerName + ' (state=' + state + ')', 'ok');
+          this.ui.setHint('Картинка ' + markerName + ' найдена! Объект следует за маркером.');
         }
 
         const t = pose.transform;
-        entry.sphere.position.set(t.position.x, t.position.y, t.position.z);
-        entry.sphere.quaternion.set(
+        entry.arTarget.position.set(t.position.x, t.position.y, t.position.z);
+        entry.arTarget.quaternion.set(
             t.orientation.x,
             t.orientation.y,
             t.orientation.z,
@@ -139,16 +142,16 @@ export class ImageRecognition {
         entry.lastState = state;
 
         if (state === 'emulated') {
-          entry.sphere.scale.setScalar(0.7);
+          entry.arTarget.scale.setScalar(0.7);
         } else {
-          entry.sphere.scale.setScalar(1.0);
+          entry.arTarget.scale.setScalar(1.0);
         }
       }
 
       for (const [idx, entry] of this.trackedMarkers) {
         if (!seen.has(idx) && entry.lastState !== 'lost') {
           entry.lastState = 'lost';
-          this.ui.log('[' + idx + '] Tracking lost (sphere stays at last pose)', 'warn');
+          this.ui.log('[' + idx + '] Tracking lost (AR Target stays at last pose)', 'warn');
         }
       }
     } catch (e) {

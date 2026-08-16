@@ -1,0 +1,138 @@
+// js/artarget.js
+import * as THREE from 'three';
+
+/**
+ * Composite AR target:
+ * - central sphere
+ * - left vertical panel  — text with marker name
+ * - right vertical panel — image placeholder
+ */
+export function createArTarget(markerName = 'T1') {
+    const group = new THREE.Group();
+    group.name = `arTarget_${markerName}`;
+
+    // --- central sphere ---
+    const sphereGeo = new THREE.SphereGeometry(0.06, 24, 24);
+    const sphereMat = new THREE.MeshStandardMaterial({
+        color: 0xff00ff,
+        metalness: 0.3,
+        roughness: 0.4,
+        emissive: 0xff00ff,
+        emissiveIntensity: 0.15
+    });
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+    group.add(sphere);
+
+    const panelW = 0.12;
+    const panelH = 0.18;
+    const panelOffset = 0.12;
+
+    // --- left panel: text ---
+    const textCanvas = document.createElement('canvas');
+    textCanvas.width = 256;
+    textCanvas.height = 384;
+    const tctx = textCanvas.getContext('2d');
+
+    tctx.fillStyle = 'rgba(10, 10, 30, 0.92)';
+    tctx.fillRect(0, 0, 256, 384);
+
+    tctx.strokeStyle = '#00ffaa';
+    tctx.lineWidth = 8;
+    tctx.strokeRect(4, 4, 248, 376);
+
+    tctx.fillStyle = '#00ffaa';
+    tctx.font = 'bold 28px sans-serif';
+    tctx.textAlign = 'center';
+    tctx.fillText('MARKER', 128, 60);
+
+    tctx.fillStyle = '#ffffff';
+    tctx.font = 'bold 36px sans-serif';
+    tctx.fillText(String(markerName), 128, 200);
+
+    tctx.fillStyle = '#aaaaaa';
+    tctx.font = '20px sans-serif';
+    tctx.fillText('AR Target', 128, 280);
+
+    const textTex = new THREE.CanvasTexture(textCanvas);
+    textTex.colorSpace = THREE.SRGBColorSpace;
+    textTex.needsUpdate = true;
+
+    const textPanel = new THREE.Mesh(
+        new THREE.PlaneGeometry(panelW, panelH),
+        new THREE.MeshBasicMaterial({
+            map: textTex,
+            transparent: true,
+            side: THREE.DoubleSide
+        })
+    );
+    textPanel.position.set(-panelOffset, 0.02, 0);
+    textPanel.rotation.y = Math.PI * 0.08;
+    group.add(textPanel);
+
+    // --- right panel: image placeholder ---
+    const imgCanvas = document.createElement('canvas');
+    imgCanvas.width = 256;
+    imgCanvas.height = 384;
+    const ictx = imgCanvas.getContext('2d');
+
+    const grad = ictx.createLinearGradient(0, 0, 0, 384);
+    grad.addColorStop(0, '#1a0033');
+    grad.addColorStop(1, '#003344');
+    ictx.fillStyle = grad;
+    ictx.fillRect(0, 0, 256, 384);
+
+    for (let i = 0; i < 12; i++) {
+        ictx.beginPath();
+        ictx.arc(
+            40 + Math.random() * 176,
+            40 + Math.random() * 304,
+            8 + Math.random() * 24,
+            0,
+            Math.PI * 2
+        );
+        ictx.fillStyle = `hsla(${200 + Math.random() * 80}, 70%, 55%, 0.7)`;
+        ictx.fill();
+    }
+
+    ictx.strokeStyle = '#ff66cc';
+    ictx.lineWidth = 8;
+    ictx.strokeRect(4, 4, 248, 376);
+
+    ictx.fillStyle = '#ff66cc';
+    ictx.font = 'bold 22px sans-serif';
+    ictx.textAlign = 'center';
+    ictx.fillText('IMAGE', 128, 50);
+
+    ictx.fillStyle = '#ffffff';
+    ictx.font = '18px sans-serif';
+    ictx.fillText(String(markerName), 128, 340);
+
+    const imgTex = new THREE.CanvasTexture(imgCanvas);
+    imgTex.colorSpace = THREE.SRGBColorSpace;
+    imgTex.needsUpdate = true;
+
+    const imgPanel = new THREE.Mesh(
+        new THREE.PlaneGeometry(panelW, panelH),
+        new THREE.MeshBasicMaterial({
+            map: imgTex,
+            transparent: true,
+            side: THREE.DoubleSide
+        })
+    );
+    imgPanel.position.set(panelOffset, 0.02, 0);
+    imgPanel.rotation.y = -Math.PI * 0.08;
+    group.add(imgPanel);
+
+    group.position.y = 0.08;
+
+    group.userData = {
+        markerName,
+        sphere,
+        textPanel,
+        imgPanel,
+        textTexture: textTex,
+        imgTexture: imgTex
+    };
+
+    return group;
+}
