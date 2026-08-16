@@ -1,0 +1,24 @@
+{
+  "ar": {
+    "patternUrl": "assets/hiro.patt",
+    "patternLabel": "hiro.patt",
+    "markerId": "markerHiro",
+    "anchorLabel": "Hiro"
+  },
+  "ui": {
+    "debugEnabled": true,
+    "uiHiddenInitially": false,
+    "maxLogEntries": 200
+  },
+  "timers": {
+    "loaderFallbackMs": 4000,
+    "videoInfoDelayMs": 2000,
+    "forceCssSizeDelaysMs": [300, 1000, 2500],
+    "debugCanvasWatcherDelaysMs": [400, 1000, 2000, 4000, 8000]
+  },
+  "scene": {
+    "groundPlaneId": "groundPlane",
+    "worldSphereId": "worldSphere",
+    "sceneId": "scene"
+  }
+}
