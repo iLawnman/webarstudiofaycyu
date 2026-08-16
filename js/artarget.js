@@ -6,11 +6,14 @@ import * as THREE from 'three';
  * - central sphere (r=0.01)
  * - left vertical panel  — text with marker name
  * - right vertical panel — image placeholder
+ * - bottom panel         — OK button
  *
  * WebXR imageSpace: image in XY, +Z normal out of image.
  * PlaneGeometry is XY → flat on marker; rotation.x = -π/2 stands panels up.
  */
-export function createArTarget(markerName = 'T1') {
+export function createArTarget(markerName = 'T1', options = {}) {
+    const { onOk = null } = options;
+
     const group = new THREE.Group();
     group.name = `arTarget_${markerName}`;
 
@@ -69,7 +72,6 @@ export function createArTarget(markerName = 'T1') {
         })
     );
     textPanel.position.set(-panelOffset, 0, 0.02);
-    // 90° clockwise around X: stand up from image plane (Z = normal)
     textPanel.rotation.x = -Math.PI / 2;
     group.add(textPanel);
 
@@ -124,11 +126,52 @@ export function createArTarget(markerName = 'T1') {
         })
     );
     imgPanel.position.set(panelOffset, 0, 0.02);
-    // 90° clockwise around X: stand up from image plane
     imgPanel.rotation.x = -Math.PI / 2;
     group.add(imgPanel);
 
-    // slight lift along image normal (+Z)
+    // --- bottom panel: OK button ---
+    const okW = 0.16;
+    const okH = 0.06;
+    const okCanvas = document.createElement('canvas');
+    okCanvas.width = 256;
+    okCanvas.height = 96;
+    const octx = okCanvas.getContext('2d');
+
+    octx.fillStyle = 'rgba(0, 40, 20, 0.95)';
+    octx.fillRect(0, 0, 256, 96);
+
+    octx.fillStyle = '#00cc66';
+    octx.beginPath();
+    roundRect(octx, 24, 16, 208, 64, 12);
+    octx.fill();
+
+    octx.strokeStyle = '#00ff99';
+    octx.lineWidth = 4;
+    octx.stroke();
+
+    octx.fillStyle = '#ffffff';
+    octx.font = 'bold 40px sans-serif';
+    octx.textAlign = 'center';
+    octx.textBaseline = 'middle';
+    octx.fillText('OK', 128, 48);
+
+    const okTex = new THREE.CanvasTexture(okCanvas);
+    okTex.colorSpace = THREE.SRGBColorSpace;
+    okTex.needsUpdate = true;
+
+    const okPanel = new THREE.Mesh(
+        new THREE.PlaneGeometry(okW, okH),
+        new THREE.MeshBasicMaterial({
+            map: okTex,
+            transparent: true,
+            side: THREE.DoubleSide
+        })
+    );
+    okPanel.position.set(0, -0.14, 0.02);
+    okPanel.rotation.x = -Math.PI / 2;
+    okPanel.name = 'okButton';
+    group.add(okPanel);
+
     group.position.z = 0.02;
 
     group.userData = {
@@ -136,9 +179,25 @@ export function createArTarget(markerName = 'T1') {
         sphere,
         textPanel,
         imgPanel,
+        okPanel,
         textTexture: textTex,
-        imgTexture: imgTex
+        imgTexture: imgTex,
+        okTexture: okTex,
+        onOk
     };
 
     return group;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
 }

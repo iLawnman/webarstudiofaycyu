@@ -81,9 +81,12 @@ export class App {
     this.ui.log('Renderer session set (WebGL + local-floor)', 'ok');
     this.imageTrackingEnabled = true;
 
+    this.recognition.attachInput(this.xrSession, this.arScene);
+
     this.xrSession.addEventListener('end', () => {
       this.ui.log('Session ended', 'warn');
       this.imageTrackingEnabled = false;
+      this.recognition.detachInput();
       this.xrSession = null;
       this.frameCount = 0;
       this.ui.enableArButton();
