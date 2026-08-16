@@ -1,77 +1,78 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>1 Modules AR Marker Viewer</title>
-
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
-  <link rel="stylesheet" href="styles.css">
-  <base target="_blank">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>window AR Debug — T1</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    canvas { display: block; }
+    #log-panel {
+      position: fixed; top: 10px; right: 10px; width: 320px; max-height: 75vh;
+      background: rgba(0,0,0,0.78); backdrop-filter: blur(8px);
+      border-radius: 12px; border: 1px solid rgba(255,255,255,0.12);
+      color: #0f0; font-family: 'SF Mono', Monaco, monospace; font-size: 11px;
+      line-height: 1.5; overflow-y: auto; z-index: 100;
+      transition: transform .3s ease, opacity .3s ease;
+      padding: 12px; word-break: break-word;
+    }
+    #log-panel.collapsed { transform: translateX(calc(100% + 30px)); opacity: 0; pointer-events: none; }
+    #log-panel .entry { margin-bottom: 4px; }
+    #log-panel .entry.err { color: #ff4444; }
+    #log-panel .entry.warn { color: #ffaa00; }
+    #log-panel .entry.info { color: #44aaff; }
+    #log-panel .entry.ok { color: #44ff44; }
+    #log-toggle {
+      position: fixed; top: 10px; right: 10px; z-index: 101;
+      background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+    #ctrl {
+      position: fixed; bottom: 24px; left: 0; width: 100%;
+      display: flex; justify-content: center; gap: 12px; z-index: 50;
+      pointer-events: none;
+    }
+    #ctrl button {
+      pointer-events: auto; padding: 12px 24px; font-size: 15px;
+      border: none; border-radius: 10px; font-weight: 600; cursor: pointer;
+      background: #fff; color: #000; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    #ctrl button:disabled { opacity: .45; cursor: not-allowed; }
+    #ctrl button.secondary { background: rgba(255,255,255,0.15); color: #fff; }
+    #hint {
+      position: fixed; top: 50px; left: 0; width: 100%; text-align: center;
+      color: #fff; font-size: 13px; pointer-events: none; z-index: 40;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9); padding: 0 20px;
+    }
+    #target-preview {
+      position: fixed; bottom: 90px; left: 12px; width: 80px; height: 80px;
+      border-radius: 8px; border: 2px solid rgba(255,255,255,0.3);
+      background: rgba(0,0,0,0.5); object-fit: cover; z-index: 60;
+      display: none;
+    }
+  </style>
 </head>
-<body class="show-arjs-debug">
-
-<div class="chrome" id="chrome">
-  <div class="chrome-row">
-    <div id="statusPill" class="status-pill"><span class="led"></span><span id="statusText">поиск…</span></div>
-    <label class="chip on" id="debugChip"><input type="checkbox" id="debugToggle" checked> рамки</label>
-    <span id="diagStatus"></span>
+<body>
+  <button id="log-toggle">LOG</button>
+  <div id="log-panel"></div>
+  <img id="target-preview" alt="target">
+  <div id="hint">Инициализация…</div>
+  <div id="ctrl">
+    <button id="btn-ar" disabled>Start AR</button>
+    <button id="btn-test" class="secondary" disabled>Test Anchor</button>
   </div>
-</div>
 
-<button id="uiToggle" type="button">UI</button>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 
-<div class="arjs-loader" id="loader">
-  <div class="spinner"></div>
-  <p>Камера…</p>
-</div>
-
-<div id="markerFrame"><div class="box"></div></div>
-
-<div id="logPanel" class="hidden">
-  <button id="logEar" type="button" title="Лог"><span>ЛОГ</span></button>
-  <div id="logPanelHead">
-    <span>ЛОГ</span>
-    <div style="display:flex;gap:6px;">
-      <button id="logClearBtn" type="button">очистить</button>
-      <button id="logHideBtn" type="button">✕</button>
-    </div>
-  </div>
-  <div id="logList"></div>
-</div>
-
-<a-scene
-        id="scene"
-        vr-mode-ui="enabled: false"
-        renderer="logarithmicDepthBuffer: true; precision: mediump; antialias: true; alpha: true"
-        embedded
-        arjs="sourceType: webcam; debugUIEnabled: true; detectionMode: mono_and_matrix; matrixCodeType: 3x3; markersAreaEnabled: true;"
-        loading-screen="enabled: false"
->
-  <a-assets></a-assets>
-
-  <!-- Пол -->
-  <a-plane id="groundPlane" position="0 -0.5 -2" rotation="-90 0 0" width="6" height="6"
-           material="color:#1a2630; opacity:0.85; transparent: true; side: double">
-  </a-plane>
-
-  <!-- Статичная сфера в центре мира -->
-  <a-sphere id="worldSphere" position="0 0 0" radius="2"
-            material="color:#5ee3a5; emissive:#2f7a58; emissiveIntensity:0.35; metalness:0.2; roughness:0.3">
-  </a-sphere>
-
-  <!-- Маркер Hiro -->
-  <a-marker id="markerHiro" preset="hiro" emitevents="true" smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="2">
-    <a-box position="0 0 1" depth="1" height="1" width="1"
-           material="color:#5ee3a5; emissive:#2f7a58; emissiveIntensity:0.45; metalness:0.1; roughness:0.4">
-    </a-box>
-  </a-marker>
-
-  <!-- Камера -->
-  <a-entity camera></a-entity>
-</a-scene>
-
-<script type="module" src="app.js"></script>
+  <script type="module" src="./js/app.js"></script>
 </body>
 </html>
