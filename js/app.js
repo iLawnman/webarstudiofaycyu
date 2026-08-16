@@ -1,30 +1,35 @@
-// js/app.js
+import * as THREE from 'three';
+import { UI } from './ui.js';
+import { ARScene } from './arscene.js';
+import { RecognitionManager } from './recognition.js';
+import { CalibrationManager } from './calibration.js'; // <-- Новый импорт
 
 export class App {
   constructor() {
     this.ui = new UI();
-    this.recognition = new ImageRecognition(this.ui);
-    this.arScene = new ARScene(this.ui);
+    this.arScene = new ARScene();
+    this.recognition = new RecognitionManager(this.ui);
+    this.calibration = new CalibrationManager(this.ui); // <-- Инициализация
 
-    this.xrSession = null;
     this.imageTrackingEnabled = false;
+    this.xrSession = null;
+    this.xrRefSpace = null;
+    this.currentFrame = null;
+    this.frameCount = 0;
 
-    // ВАЖНО: Задаем тип reference space до старта сессии для Three.js!
-    // Three.js сам запросит 'local-floor' и привяжет (0,0,0) к полу комнаты.
-    this.arScene.renderer.xr.setReferenceSpaceType('local-floor');
-
+    this.ui.log('BOOT', 'ok');
     this.init();
   }
 
   async init() {
-    this.ui.log('App init...', 'info');
-    await this.recognition.init();
-    this.ui.bindStartAr(() => this.startAR());
+    await this.recognition.initTarget('./assets/T1.jpg');
 
-    // Анимационный цикл Three.js
-    this.arScene.renderer.setAnimationLoop((timestamp, frame) => {
-      this.onXRFrame(timestamp, frame);
-    });
+    this.ui.onStartAR(() => this.startAR());
+    this.ui.onTestAnchor(() => this.addTestAnchor());
+
+    window.addEventListener('resize', () => this.arScene.onWindowResize());
+
+    this.arScene.renderer.setAnimationLoop((time, frame) => this.onFrame(time, frame));
   }
 
   async startAR() {
@@ -46,66 +51,86 @@ export class App {
     try {
       this.xrSession = await navigator.xr.requestSession('immersive-ar', {
         requiredFeatures: ['local-floor'],
-        optionalFeatures: ['image-tracking', 'dom-overlay'],
+        optionalFeatures: ['image-tracking', 'anchors', 'dom-overlay'],
         trackedImages: [{ image: this.recognition.targetBitmap, widthInMeters: 0.2 }],
         domOverlay: { root: document.body }
       });
     } catch (e) {
-      this.ui.log('Session with dom-overlay failed, retrying without it...', 'warn');
       try {
         this.xrSession = await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: ['local-floor'],
-          optionalFeatures: ['image-tracking'],
+          optionalFeatures: ['image-tracking', 'anchors'],
           trackedImages: [{ image: this.recognition.targetBitmap, widthInMeters: 0.2 }]
         });
       } catch (e2) {
-        this.ui.log('Session request FAILED: ' + e2.message, 'err');
-        this.ui.setHint('Ошибка запуска AR: ' + e2.message);
+        this.ui.log('Session FAILED: ' + e2.message, 'err');
         this.ui.enableArButton();
         return;
       }
     }
 
-    // Привязываем сессию к Three.js
     await this.arScene.renderer.xr.setSession(this.xrSession);
-    this.ui.log('Renderer session set with local-floor', 'ok');
+
+    // Устанавливаем базовую систему координат для пола
+    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local-floor');
+    this.arScene.renderer.xr.setReferenceSpace(this.xrRefSpace);
+
+    // Запускаем калибровку трекинга перед открытием сцены
+    this.calibration.start(() => {
+      this.ui.setHint('Калибровка завершена. AR сцену зафиксировано.');
+      this.ui.enableTestButton();
+    });
 
     this.xrSession.addEventListener('end', () => {
       this.ui.log('Session ended', 'warn');
-      this.imageTrackingEnabled = false;
+      this.calibration.cancel();
       this.xrSession = null;
       this.ui.enableArButton();
+      this.ui.disableTestButton();
     });
   }
 
-  onXRFrame(timestamp, frame) {
-    if (!frame) {
-      this.arScene.render();
-      return;
-    }
+  async addTestAnchor() {
+    if (!this.xrSession || !this.xrRefSpace || !this.currentFrame) return;
 
-    // Если используется Image Tracking — обновляем сцену относительно картинки,
-    // в противном случае scene остаётся неподвижно привязана к local-floor (0,0,0)
-    if (this.imageTrackingEnabled) {
-      this.checkImageTracking(frame);
+    const vp = this.currentFrame.getViewerPose(this.xrRefSpace);
+    if (!vp) return;
+
+    const p = vp.transform.position;
+    const q = vp.transform.orientation;
+    const fwd = new THREE.Vector3(0, 0, -1.5).applyQuaternion(new THREE.Quaternion(q.x, q.y, q.z, q.w));
+    const pos = { x: p.x + fwd.x, y: p.y + fwd.y, z: p.z + fwd.z };
+
+    try {
+      const anchor = await this.currentFrame.createAnchor(new XRRigidTransform(pos, q), this.xrRefSpace);
+      const sph = this.arScene.createSphereMesh(0x00ff88);
+      this.arScene.addTestAnchor(anchor, sph);
+      this.ui.log('Test anchor OK', 'ok');
+    } catch (e) {
+      this.ui.log('Test anchor FAILED: ' + e.message, 'err');
+    }
+  }
+
+  onFrame(time, frame) {
+    this.frameCount++;
+    this.currentFrame = frame;
+
+    if (frame && this.xrRefSpace) {
+      // Обновляем прогресс калибровки каждый кадр
+      if (this.calibration.isCalibrating) {
+        this.calibration.update(frame, this.xrRefSpace);
+      }
+
+      if (this.imageTrackingEnabled) {
+        this.recognition.processTracking(frame, this.xrRefSpace, this.frameCount, this.arScene);
+      }
+
+      this.recognition.updateAnchors(frame, this.xrRefSpace);
+      this.arScene.updateTestAnchors(frame, this.xrRefSpace);
     }
 
     this.arScene.render();
   }
-
-  checkImageTracking(frame) {
-    const results = frame.getImageTrackingResults ? frame.getImageTrackingResults() : [];
-    if (!results || results.length === 0) return;
-
-    const refSpace = this.arScene.renderer.xr.getReferenceSpace();
-    if (!refSpace) return;
-
-    for (const result of results) {
-      const pose = frame.getPose(result.imageSpace, refSpace);
-      if (pose) {
-        // Устанавливаем положение объектов по трекингу маркера
-        this.arScene.updateWorldMatrixFromPose(pose.transform.matrix);
-      }
-    }
-  }
 }
+
+new App();
