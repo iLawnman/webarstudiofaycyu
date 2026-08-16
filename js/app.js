@@ -1,119 +1,106 @@
 // js/app.js
-import * as THREE from 'three';
-import { UI } from './ui.js';
-import { ARScene } from './arscene.js';
+
+import { ARScene } from './ arscene.js';
 import { CalibrationManager } from './calibration.js';
 
 export class App {
   constructor() {
-    this.ui = new UI();
+    this.ui = new UI(); // Инициализация UI из вашей структуры
     this.arScene = new ARScene(this.ui);
     this.calibration = new CalibrationManager(this.ui);
 
     this.xrSession = null;
-    this.isArActive = false;
-
-    // Включаем XR и задаем тип пространства заранее
-    this.arScene.renderer.xr.enabled = true;
-    this.arScene.renderer.xr.setReferenceSpaceType('local-floor');
+    this.xrRefSpace = null;
+    this.isSceneReady = false;
 
     this.init();
   }
 
-  init() {
-    this.ui.log('App ready. Tap Start AR.', 'ok');
-    
-    // Назначаем клик
-    if (this.ui.btnStartAr) {
-      this.ui.btnStartAr.addEventListener('click', () => this.startAR());
-    }
-
-    window.addEventListener('resize', () => this.arScene.onWindowResize());
-
-    // Единый главный цикл Three.js
-    this.arScene.renderer.setAnimationLoop((time, frame) => this.onFrame(time, frame));
+  async init() {
+    this.ui.log('App init (Native WebXR)...', 'info');
+    this.ui.bindStartAr(() => this.startAR());
   }
 
   async startAR() {
     this.ui.disableArButton();
-    this.ui.log('Starting AR Session...', 'info');
+    this.ui.log('>>> Start AR clicked', 'info');
 
     if (!navigator.xr) {
-      this.ui.log('WebXR not supported', 'err');
-      this.ui.setHint('WebXR не поддерживается на вашем устройстве');
+      this.ui.setHint('WebXR не поддерживается');
+      return;
+    }
+
+    const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
+    if (!supported) {
+      this.ui.setHint('immersive-ar не поддерживается');
       return;
     }
 
     try {
-      const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-      if (!isSupported) {
-        this.ui.log('immersive-ar not supported', 'err');
-        this.ui.setHint('Режим immersive-ar недоступен');
-        this.ui.enableArButton();
-        return;
-      }
+      this.xrSession = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['local-floor'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: document.body }
+      });
     } catch (e) {
-      this.ui.log('Check support error: ' + e.message, 'err');
+      this.xrSession = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['local-floor']
+      });
     }
 
-    // Базовый минимальный набор фич без блокирующих опций
-    const sessionInit = {
-      requiredFeatures: ['local-floor']
-    };
+    // Привязка контекста WebGL к XR Session напрямую
+    await this.arScene.gl.makeXRCompatible();
+    
+    this.xrSession.updateRenderState({
+      baseLayer: new XRWebGLLayer(this.xrSession, this.arScene.gl)
+    });
 
-    try {
-      this.xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
-      this.ui.log('Session acquired', 'ok');
-    } catch (e) {
-      this.ui.log('requestSession error: ' + e.message, 'err');
-      this.ui.setHint('Не удалось открыть AR сессию: ' + e.message);
-      this.ui.enableArButton();
-      return;
-    }
+    // Запрашиваем local-floor (физический уровень пола = 0)
+    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local-floor');
 
-    // Событие завершения сессии
     this.xrSession.addEventListener('end', () => {
-      this.ui.log('AR Session ended', 'warn');
-      this.isArActive = false;
+      this.ui.log('Session ended', 'warn');
       this.xrSession = null;
-      this.calibration.cancel();
+      this.isSceneReady = false;
       this.ui.enableArButton();
     });
 
-    // Передаем сессию Three.js (Three.js сам синхронно настроит reference space 'local-floor')
-    try {
-      await this.arScene.renderer.xr.setSession(this.xrSession);
-      this.isArActive = true;
-      this.ui.log('Three.js XR session active', 'ok');
-    } catch (e) {
-      this.ui.log('setSession error: ' + e.message, 'err');
-      this.ui.enableArButton();
-      return;
+    // --- СТАРТ КАЛИБРОВКИ ДО ЗАПУСКА ОСНОВНОЙ СЦЕНЫ ---
+    const success = await this.calibration.runCalibration(this.xrSession);
+    if (success) {
+      this.isSceneReady = true;
+      this.ui.setHint('Сцена запущена. Пол на уровне Y = -1');
     }
 
-    // Запускаем калибровку
-    this.calibration.start(() => {
-      this.ui.log('Calibration complete! Floor locked.', 'ok');
-      this.ui.setHint('Пол зафиксирован. AR активен.');
-    });
+    // Запуск анимационного цикла WebXR
+    this.xrSession.requestAnimationFrame((time, frame) => this.onXRFrame(time, frame));
   }
 
-  onFrame(time, frame) {
-    // 1. Если идет AR-сессия и мы в процессе калибровки
-    if (this.isArActive && frame && this.calibration.isCalibrating) {
-      // Получаем referenceSpace, который Three.js создал автоматически
-      const refSpace = this.arScene.renderer.xr.getReferenceSpace();
-      if (refSpace) {
-        this.calibration.update(frame, refSpace);
+  onXRFrame(time, frame) {
+    const session = frame.session;
+    session.requestAnimationFrame((t, f) => this.onXRFrame(t, f));
+
+    const pose = frame.getViewerPose(this.xrRefSpace);
+    if (!pose) return;
+
+    const gl = this.arScene.gl;
+    const layer = session.renderState.baseLayer;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // Отрисовываем основную сцену только ПОСЛЕ успешной калибровки
+    if (this.isSceneReady) {
+      for (const view of pose.views) {
+        const viewport = layer.getViewport(view);
+        gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+
+        // Передаем матрицы проекции и вида в WebGL рендер
+        this.arScene.renderView(view.projectionMatrix, view.transform.inverse.matrix);
       }
     }
-
-    // 2. Рендеринг сцены на каждом кадре
-    this.arScene.render();
   }
 }
 
-// Старт приложения при загрузке скрипта
-window.addEventListener('DOMContentLoaded', () => {
-  new App();
-});
+new App();
