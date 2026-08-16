@@ -5,7 +5,8 @@ import { createArTarget } from './artarget.js';
 export class ImageRecognition {
   constructor(ui) {
     this.ui = ui;
-    this.targetBitmap = null;
+    /** @type {Array<{bmp: ImageBitmap, name: string, src: string}>} */
+    this.targetBitmaps = [];
     this.trackedMarkers = new Map();
     // waitingImage  — ждём распознавания маркера
     // waitingInput  — маркер найден, ждём нажатия OK
@@ -18,6 +19,9 @@ export class ImageRecognition {
     this._arScene = null;
     this._xrSession = null;
   }
+
+  /** Путь к манифесту со списком маркеров */
+  static MANIFEST_URL = './assets/recognitionimages.json';
 
   async makeGeneratedBitmap() {
     this.ui.log('Generating fallback bitmap...', 'warn');
@@ -49,6 +53,50 @@ export class ImageRecognition {
     const bmp = await createImageBitmap(blob);
     this.ui.log('Fallback bitmap 512x512 ready', 'ok');
     return bmp;
+  }
+
+  /**
+   * Загружает манифест recognitionimages.json.
+   * Поддерживаемые форматы:
+   *   ["T1.jpg", "T2.jpg"]
+   *   [{ "name": "T1", "src": "T1.jpg" }, ...]
+   *   { "images": [ ... ] }
+   * Пути без префикса считаются относительно ./assets/
+   */
+  async loadImageList() {
+    const url = ImageRecognition.MANIFEST_URL;
+    this.ui.log('Loading image list from: ' + url, 'info');
+    try {
+      const res = await fetch(url);
+      this.ui.log('Manifest fetch: ' + res.status + ' ' + res.statusText, res.ok ? 'ok' : 'warn');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      const data = await res.json();
+      let items = Array.isArray(data) ? data : (data.images || data.markers || []);
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new Error('Empty or invalid image list');
+      }
+
+      return items.map((item, i) => {
+        if (typeof item === 'string') {
+          const name = item.replace(/\.[^.]+$/, '') || ('T' + (i + 1));
+          const src = item.startsWith('./') || item.startsWith('/') || item.startsWith('http')
+              ? item
+              : './assets/' + item;
+          return { name, src };
+        }
+        const name = item.name || item.id || ('T' + (i + 1));
+        let src = item.src || item.url || item.path || item.file;
+        if (!src) throw new Error('Item #' + i + ' has no src');
+        if (!src.startsWith('./') && !src.startsWith('/') && !src.startsWith('http')) {
+          src = './assets/' + src;
+        }
+        return { name, src };
+      });
+    } catch (e) {
+      this.ui.log('Manifest load failed: ' + e.message, 'err');
+      return null;
+    }
   }
 
   async loadTargetImage(src) {
@@ -92,16 +140,39 @@ export class ImageRecognition {
     });
   }
 
-  async init(src = './assets/T1.jpg') {
+  /**
+   * Загружает список картинок из манифеста и готовит ImageBitmap[] для XR Image Tracking.
+   * При ошибке манифеста или загрузки — fallback на сгенерированный маркер.
+   */
+  async init() {
     this.state = 'waitingImage';
-    const result = await this.loadTargetImage(src);
-    if (result && result.bmp) {
-      this.targetBitmap = result.bmp;
-      this.ui.log('Target ready via ' + result.source, 'ok');
-      this.ui.setPreview(src);
-    } else {
-      this.ui.log('All loaders failed for ' + src + ', using generated fallback', 'err');
-      this.targetBitmap = await this.makeGeneratedBitmap();
+    this.targetBitmaps = [];
+
+    const list = await this.loadImageList();
+
+    if (list && list.length) {
+      this.ui.log('Found ' + list.length + ' image(s) in manifest', 'info');
+      for (const item of list) {
+        const result = await this.loadTargetImage(item.src);
+        if (result && result.bmp) {
+          this.targetBitmaps.push({
+            bmp: result.bmp,
+            name: item.name,
+            src: item.src,
+            source: result.source
+          });
+          this.ui.log('Ready: ' + item.name + ' via ' + result.source, 'ok');
+        } else {
+          this.ui.log('Skip failed: ' + item.src, 'err');
+        }
+      }
+    }
+
+    if (this.targetBitmaps.length === 0) {
+      this.ui.log('No images loaded, using generated fallback', 'err');
+      const bmp = await this.makeGeneratedBitmap();
+      this.targetBitmaps.push({ bmp, name: 'T1', src: '(generated)', source: 'generated' });
+
       const c = document.createElement('canvas');
       c.width = 128;
       c.height = 128;
@@ -111,10 +182,26 @@ export class ImageRecognition {
       ctx.fillStyle = '#ff0055';
       ctx.fillRect(32, 32, 64, 64);
       this.ui.setPreview(c.toDataURL());
+    } else {
+      // превью первой картинки
+      this.ui.setPreview(this.targetBitmaps[0].src);
     }
-    this.ui.setHint('Нажмите «Start AR». Камера на 1.6 м. Покажите картинку T1.jpg.');
+
+    const names = this.targetBitmaps.map(t => t.name).join(', ');
+    this.ui.setHint('Нажмите «Start AR». Камера на 1.6 м. Покажите: ' + names);
     this.ui.enableArButton();
-    this.ui.log('state → waitingImage', 'info');
+    this.ui.log('state → waitingImage | markers: ' + names, 'info');
+  }
+
+  /** Возвращает массив ImageBitmap для передачи в XR (image-tracking). */
+  getBitmaps() {
+    return this.targetBitmaps.map(t => t.bmp);
+  }
+
+  /** Имя маркера по индексу из getImageTrackingResults(). */
+  getMarkerName(idx) {
+    const entry = this.targetBitmaps[idx];
+    return entry ? entry.name : ('T' + (idx + 1));
   }
 
   attachInput(xrSession, arScene) {
@@ -223,7 +310,7 @@ export class ImageRecognition {
         if (!entry) {
           if (this.state !== 'waitingImage') continue;
 
-          const markerName = 'T' + (idx + 1);
+          const markerName = this.getMarkerName(idx);
           const arTarget = createArTarget(markerName, {
             onOk: () => {
               const e = this.trackedMarkers.get(idx);
