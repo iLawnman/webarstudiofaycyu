@@ -1,24 +1,49 @@
 {
-  "ar": {
-    "patternUrl": "assets/hiro.patt",
-    "patternLabel": "hiro.patt",
-    "markerId": "markerHiro",
-    "anchorLabel": "Hiro"
+  "dom": {
+    "selectors": {
+      "scene": "#scene",
+      "marker": "#markerHiro",
+      "groundPlane": "#groundPlane",
+      "worldSphere": "#worldSphere",
+      "statusPill": "#statusPill",
+      "statusText": "#statusText",
+      "statusLed": ".led",
+      "debugChip": "#debugChip",
+      "debugToggle": "#debugToggle",
+      "uiToggle": "#uiToggle",
+      "loader": "#loader",
+      "markerFrame": "#markerFrame",
+      "logPanel": "#logPanel",
+      "logEar": "#logEar",
+      "logList": "#logList",
+      "logClearBtn": "#logClearBtn",
+      "logHideBtn": "#logHideBtn",
+      "diagStatus": "#diagStatus",
+      "chrome": "#chrome"
+    }
   },
   "ui": {
-    "debugEnabled": true,
-    "uiHiddenInitially": false,
-    "maxLogEntries": 200
+    "status": {
+      "searching": {
+        "text": "поиск…",
+        "ledClass": "searching"
+      },
+      "found": {
+        "text": "маркер найден",
+        "ledClass": "found"
+      },
+      "lost": {
+        "text": "маркер потерян",
+        "ledClass": "lost"
+      }
+    },
+    "logMaxEntries": 200,
+    "debugDefault": true
   },
-  "timers": {
-    "loaderFallbackMs": 4000,
-    "videoInfoDelayMs": 2000,
-    "forceCssSizeDelaysMs": [300, 1000, 2500],
-    "debugCanvasWatcherDelaysMs": [400, 1000, 2000, 4000, 8000]
-  },
-  "scene": {
-    "groundPlaneId": "groundPlane",
-    "worldSphereId": "worldSphere",
-    "sceneId": "scene"
+  "ar": {
+    "markerEvents": {
+      "found": "markerFound",
+      "lost": "markerLost"
+    }
   }
 }
