@@ -3,16 +3,19 @@ import * as THREE from 'three';
 
 /**
  * Composite AR target:
- * - central sphere
+ * - central sphere (r=0.01)
  * - left vertical panel  — text with marker name
  * - right vertical panel — image placeholder
+ *
+ * WebXR imageSpace: image in XY, +Z normal out of image.
+ * PlaneGeometry is XY → flat on marker; rotation.x = -π/2 stands panels up.
  */
 export function createArTarget(markerName = 'T1') {
     const group = new THREE.Group();
     group.name = `arTarget_${markerName}`;
 
     // --- central sphere ---
-    const sphereGeo = new THREE.SphereGeometry(0.06, 24, 24);
+    const sphereGeo = new THREE.SphereGeometry(0.01, 24, 24);
     const sphereMat = new THREE.MeshStandardMaterial({
         color: 0xff00ff,
         metalness: 0.3,
@@ -65,8 +68,9 @@ export function createArTarget(markerName = 'T1') {
             side: THREE.DoubleSide
         })
     );
-    textPanel.position.set(-panelOffset, 0.02, 0);
-    textPanel.rotation.y = Math.PI * 0.08;
+    textPanel.position.set(-panelOffset, 0, 0.02);
+    // 90° clockwise around X: stand up from image plane (Z = normal)
+    textPanel.rotation.x = -Math.PI / 2;
     group.add(textPanel);
 
     // --- right panel: image placeholder ---
@@ -119,11 +123,13 @@ export function createArTarget(markerName = 'T1') {
             side: THREE.DoubleSide
         })
     );
-    imgPanel.position.set(panelOffset, 0.02, 0);
-    imgPanel.rotation.y = -Math.PI * 0.08;
+    imgPanel.position.set(panelOffset, 0, 0.02);
+    // 90° clockwise around X: stand up from image plane
+    imgPanel.rotation.x = -Math.PI / 2;
     group.add(imgPanel);
 
-    group.position.y = 0.08;
+    // slight lift along image normal (+Z)
+    group.position.z = 0.02;
 
     group.userData = {
         markerName,
