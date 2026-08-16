@@ -14,6 +14,7 @@ class App {
     this.xrRefSpace = null;
     this.currentFrame = null;
     this.frameCount = 0;
+    this.worldAnchorRequested = false;
 
     this.ui.log('BOOT', 'ok');
     this.init();
@@ -33,6 +34,7 @@ class App {
   async startAR() {
     this.ui.disableArButton();
     this.ui.log('>>> Start AR clicked', 'info');
+    this.worldAnchorRequested = false;
 
     if (!navigator.xr) {
       this.ui.log('navigator.xr missing', 'err');
@@ -86,7 +88,7 @@ class App {
     this.ui.log('image-tracking active: ' + this.imageTrackingEnabled, this.imageTrackingEnabled ? 'ok' : 'warn');
 
     let baseRef = await this.xrSession.requestReferenceSpace('local-floor');
-    const offset = new XRRigidTransform({ x: 0, y: -1.6, z: 0 });
+    const offset = new XRRigidTransform({ x: 0, y: -1, z: 0 });
     this.xrRefSpace = baseRef.getOffsetReferenceSpace(offset);
     this.arScene.renderer.xr.setReferenceSpace(this.xrRefSpace);
     this.ui.log('RefSpace: local-floor + Y=1.6m', 'ok');
@@ -101,9 +103,25 @@ class App {
       this.imageTrackingEnabled = false;
       this.xrSession = null;
       this.currentFrame = null;
+      this.worldAnchorRequested = false;
       this.ui.enableArButton();
       this.ui.disableTestButton();
     });
+  }
+
+  async createInitialWorldAnchor(frame) {
+    if (this.worldAnchorRequested || !frame || !this.xrRefSpace) return;
+    this.worldAnchorRequested = true;
+
+    try {
+      // Инициализируем якорь пола в нулевой точке reference space
+      const identityTransform = new XRRigidTransform({ x: 0, y: 0, z: 0 });
+      const anchor = await frame.createAnchor(identityTransform, this.xrRefSpace);
+      this.arScene.setWorldAnchor(anchor);
+      this.ui.log('World Scene Anchor established successfully', 'ok');
+    } catch (e) {
+      this.ui.log('Failed to create World Anchor: ' + e.message, 'err');
+    }
   }
 
   async addTestAnchor() {
@@ -139,6 +157,11 @@ class App {
     this.currentFrame = frame;
 
     if (frame && this.xrRefSpace) {
+      // Инициализируем якорь сцены на первом же кадре
+      if (!this.worldAnchorRequested) {
+        this.createInitialWorldAnchor(frame);
+      }
+
       if (this.frameCount % 150 === 0) {
         const vp = frame.getViewerPose(this.xrRefSpace);
         if (vp) {
@@ -151,6 +174,8 @@ class App {
         this.recognition.processTracking(frame, this.xrRefSpace, this.frameCount, this.arScene);
       }
 
+      // Обновляем позиции на основе якорей
+      this.arScene.updateWorldAnchor(frame, this.xrRefSpace);
       this.recognition.updateAnchors(frame, this.xrRefSpace);
       this.arScene.updateTestAnchors(frame, this.xrRefSpace);
     }
