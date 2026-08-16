@@ -1,106 +1,145 @@
-// js/app.js
-
-import { ARScene } from './ arscene.js';
+import { UI } from './ui.js';
+import { ARScene } from './arscene.js';
 import { CalibrationManager } from './calibration.js';
+import { RecognitionManager } from './recognition.js';
 
 export class App {
   constructor() {
-    this.ui = new UI(); // Инициализация UI из вашей структуры
-    this.arScene = new ARScene(this.ui);
-    this.calibration = new CalibrationManager(this.ui);
+    this.ui = new UI();
+    this.arScene = null;
+    this.calibration = null;
+    this.recognition = null;
 
     this.xrSession = null;
     this.xrRefSpace = null;
     this.isSceneReady = false;
+    this.frameCount = 0;
 
     this.init();
   }
 
   async init() {
-    this.ui.log('App init (Native WebXR)...', 'info');
-    this.ui.bindStartAr(() => this.startAR());
+    try {
+      this.ui.log('App init (Native WebXR)...', 'info');
+
+      this.arScene = new ARScene(this.ui);
+      this.calibration = new CalibrationManager(this.ui);
+      this.recognition = new RecognitionManager(this.ui);
+
+      if (!navigator.xr) {
+        this.ui.setHint('WebXR не поддерживается в этом браузере');
+        this.ui.log('navigator.xr missing', 'err');
+        return;
+      }
+
+      const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
+      if (!supported) {
+        this.ui.setHint('Режим immersive-ar не поддерживается');
+        this.ui.log('immersive-ar not supported', 'warn');
+        return;
+      }
+
+      // Загрузка таргета
+      await this.recognition.initTarget('./target.jpg');
+
+      this.ui.onStartAR(() => this.startAR());
+    } catch (err) {
+      console.error(err);
+      if (this.ui) this.ui.log('Init error: ' + err.message, 'err');
+    }
   }
 
   async startAR() {
     this.ui.disableArButton();
     this.ui.log('>>> Start AR clicked', 'info');
 
-    if (!navigator.xr) {
-      this.ui.setHint('WebXR не поддерживается');
-      return;
-    }
-
-    const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
-    if (!supported) {
-      this.ui.setHint('immersive-ar не поддерживается');
-      return;
-    }
-
     try {
-      this.xrSession = await navigator.xr.requestSession('immersive-ar', {
+      const sessionInit = {
         requiredFeatures: ['local-floor'],
         optionalFeatures: ['dom-overlay'],
         domOverlay: { root: document.body }
+      };
+
+      if (this.recognition.targetBitmap) {
+        sessionInit.trackedImages = [{
+          image: this.recognition.targetBitmap,
+          widthInMeters: 0.2
+        }];
+        this.ui.log('Added trackedImages to requestSession', 'ok');
+      }
+
+      try {
+        this.xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
+      } catch (e) {
+        this.ui.log('Fallback: requestSession without dom-overlay...', 'warn');
+        delete sessionInit.optionalFeatures;
+        this.xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
+      }
+
+      await this.arScene.gl.makeXRCompatible();
+      
+      this.xrSession.updateRenderState({
+        baseLayer: new XRWebGLLayer(this.xrSession, this.arScene.gl)
       });
-    } catch (e) {
-      this.xrSession = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: ['local-floor']
+
+      this.xrRefSpace = await this.xrSession.requestReferenceSpace('local-floor');
+
+      this.xrSession.addEventListener('end', () => {
+        this.ui.log('Session ended', 'warn');
+        this.xrSession = null;
+        this.isSceneReady = false;
+        this.ui.enableArButton();
+        this.ui.setHint('AR сессия завершена');
       });
-    }
 
-    // Привязка контекста WebGL к XR Session напрямую
-    await this.arScene.gl.makeXRCompatible();
-    
-    this.xrSession.updateRenderState({
-      baseLayer: new XRWebGLLayer(this.xrSession, this.arScene.gl)
-    });
+      const success = await this.calibration.runCalibration(this.xrSession);
+      
+      if (success) {
+        this.isSceneReady = true;
+        this.ui.setHint('Сцена активна. Ищите маркер.');
+        this.ui.log('Основная сцена запущена', 'ok');
+      }
 
-    // Запрашиваем local-floor (физический уровень пола = 0)
-    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local-floor');
+      this.xrSession.requestAnimationFrame((time, frame) => this.onXRFrame(time, frame));
 
-    this.xrSession.addEventListener('end', () => {
-      this.ui.log('Session ended', 'warn');
-      this.xrSession = null;
-      this.isSceneReady = false;
+    } catch (err) {
+      this.ui.log('Start AR Error: ' + err.message, 'err');
+      this.ui.setHint('Ошибка запуска: ' + err.message);
       this.ui.enableArButton();
-    });
-
-    // --- СТАРТ КАЛИБРОВКИ ДО ЗАПУСКА ОСНОВНОЙ СЦЕНЫ ---
-    const success = await this.calibration.runCalibration(this.xrSession);
-    if (success) {
-      this.isSceneReady = true;
-      this.ui.setHint('Сцена запущена. Пол на уровне Y = -1');
     }
-
-    // Запуск анимационного цикла WebXR
-    this.xrSession.requestAnimationFrame((time, frame) => this.onXRFrame(time, frame));
   }
 
   onXRFrame(time, frame) {
-    const session = frame.session;
-    session.requestAnimationFrame((t, f) => this.onXRFrame(t, f));
+    if (!this.xrSession) return;
+
+    this.xrSession.requestAnimationFrame((t, f) => this.onXRFrame(t, f));
+    this.frameCount++;
 
     const pose = frame.getViewerPose(this.xrRefSpace);
     if (!pose) return;
 
+    if (this.isSceneReady) {
+      this.recognition.processTracking(frame, this.xrRefSpace, this.frameCount, this.arScene);
+      this.recognition.updateAnchors(frame, this.xrRefSpace);
+    }
+
     const gl = this.arScene.gl;
-    const layer = session.renderState.baseLayer;
+    const layer = this.xrSession.renderState.baseLayer;
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // Отрисовываем основную сцену только ПОСЛЕ успешной калибровки
     if (this.isSceneReady) {
       for (const view of pose.views) {
         const viewport = layer.getViewport(view);
         gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-
-        // Передаем матрицы проекции и вида в WebGL рендер
         this.arScene.renderView(view.projectionMatrix, view.transform.inverse.matrix);
       }
     }
   }
 }
 
-new App();
+window.addEventListener('DOMContentLoaded', () => {
+  new App();
+});

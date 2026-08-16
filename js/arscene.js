@@ -1,5 +1,3 @@
-// js/scene.js
-
 export class ARScene {
   constructor(ui) {
     this.ui = ui;
@@ -9,19 +7,24 @@ export class ARScene {
     this.gl = this.canvas.getContext('webgl', { xrCompatible: true });
     if (!this.gl) {
       this.ui.log('WebGL не поддерживается', 'err');
+      return;
     }
 
     this.program = null;
-    this.floorVao = null;
+    this.floorBuffer = null;
     this.floorVertexCount = 0;
     
+    this.cubeBuffer = null;
+    this.cubeVertexCount = 0;
+
+    this.nodes = [];
+
     this.initGL();
   }
 
   initGL() {
     const gl = this.gl;
 
-    // Шейдеры (Simple Projection + ModelView Matrix)
     const vsSource = `
       attribute vec3 aPosition;
       attribute vec3 aColor;
@@ -63,6 +66,7 @@ export class ARScene {
     };
 
     this.setupFloorBuffer();
+    this.setupCubeBuffer();
   }
 
   compileShader(type, source) {
@@ -72,7 +76,6 @@ export class ARScene {
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
       this.ui.log('Shader error: ' + gl.getShaderInfoLog(shader), 'err');
-      gl.deleteShader(shader);
       return null;
     }
     return shader;
@@ -84,51 +87,99 @@ export class ARScene {
     const size = 10;
     const step = 1;
 
-    // Сетка пола (на уровне Y = 0 локально, смещение зададим через Model Matrix Y = -1)
     for (let i = -size; i <= size; i += step) {
-      // Линии вдоль Z
       lines.push(i, 0, -size,  0, 1, 0);
       lines.push(i, 0,  size,  0, 1, 0);
-      // Линии вдоль X
       lines.push(-size, 0, i,  0, 1, 0);
       lines.push( size, 0, i,  0, 1, 0);
     }
 
     this.floorVertexCount = lines.length / 6;
-
     this.floorBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.floorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lines), gl.STATIC_DRAW);
+  }
+
+  setupCubeBuffer() {
+    const gl = this.gl;
+    const s = 0.05; // 5см размер кубика-маркера
+    const vertices = [
+      // X, Y, Z,  R, G, B
+      -s,-s, s,   1, 0, 1,   s,-s, s,   1, 0, 1,
+       s,-s, s,   1, 0, 1,   s, s, s,   1, 0, 1,
+       s, s, s,   1, 0, 1,  -s, s, s,   1, 0, 1,
+      -s, s, s,   1, 0, 1,  -s,-s, s,   1, 0, 1,
+
+      -s,-s,-s,   1, 0, 1,   s,-s,-s,   1, 0, 1,
+       s,-s,-s,   1, 0, 1,   s, s,-s,   1, 0, 1,
+       s, s,-s,   1, 0, 1,  -s, s,-s,   1, 0, 1,
+      -s, s,-s,   1, 0, 1,  -s,-s,-s,   1, 0, 1,
+
+      -s,-s,-s,   1, 0, 1,  -s,-s, s,   1, 0, 1,
+       s,-s,-s,   1, 0, 1,   s,-s, s,   1, 0, 1,
+       s, s,-s,   1, 0, 1,   s, s, s,   1, 0, 1,
+      -s, s,-s,   1, 0, 1,  -s, s, s,   1, 0, 1,
+    ];
+
+    this.cubeVertexCount = vertices.length / 6;
+    this.cubeBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.cubeBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+  }
+
+  createMarkerNode(color = [1, 0, 1]) {
+    return {
+      matrix: new Float32Array([
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+      ]),
+      color: color
+    };
+  }
+
+  addNode(node) {
+    this.nodes.push(node);
   }
 
   renderView(projectionMatrix, viewMatrix) {
     const gl = this.gl;
 
     gl.useProgram(this.program);
-
     gl.uniformMatrix4fv(this.uniforms.projectionMatrix, false, projectionMatrix);
     gl.uniformMatrix4fv(this.uniforms.viewMatrix, false, viewMatrix);
 
-    // Матрица трансформации пола — **ОПУСКАЕМ ПОЛ НА Y = -1.0**
+    // 1. Отрисовка пола на Y = -1.0
     const floorModelMatrix = new Float32Array([
       1,  0,  0, 0,
       0,  1,  0, 0,
       0,  0,  1, 0,
-      0, -1,  0, 1  // Translation Y = -1.0
+      0, -1,  0, 1
     ]);
 
     gl.uniformMatrix4fv(this.uniforms.modelMatrix, false, floorModelMatrix);
-
     gl.bindBuffer(gl.ARRAY_BUFFER, this.floorBuffer);
     
-    // Position Attribute
     gl.enableVertexAttribArray(this.attribs.position);
     gl.vertexAttribPointer(this.attribs.position, 3, gl.FLOAT, false, 24, 0);
-    
-    // Color Attribute
     gl.enableVertexAttribArray(this.attribs.color);
     gl.vertexAttribPointer(this.attribs.color, 3, gl.FLOAT, false, 24, 12);
 
     gl.drawArrays(gl.LINES, 0, this.floorVertexCount);
+
+    // 2. Отрисовка зарегистрированных узлов (маркеров трекинга)
+    if (this.nodes.length > 0) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.cubeBuffer);
+      gl.enableVertexAttribArray(this.attribs.position);
+      gl.vertexAttribPointer(this.attribs.position, 3, gl.FLOAT, false, 24, 0);
+      gl.enableVertexAttribArray(this.attribs.color);
+      gl.vertexAttribPointer(this.attribs.color, 3, gl.FLOAT, false, 24, 12);
+
+      for (const node of this.nodes) {
+        gl.uniformMatrix4fv(this.uniforms.modelMatrix, false, node.matrix);
+        gl.drawArrays(gl.LINES, 0, this.cubeVertexCount);
+      }
+    }
   }
 }

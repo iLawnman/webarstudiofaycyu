@@ -32,11 +32,17 @@
       color: #fff; font-size: 13px; pointer-events: none; z-index: 40;
       text-shadow: 0 1px 4px rgba(0,0,0,0.9); padding: 0 20px;
     }
+    #target-preview {
+      position: fixed; bottom: 80px; right: 16px; width: 70px; height: 70px;
+      object-fit: cover; border-radius: 8px; border: 2px solid #fff;
+      display: none; z-index: 45;
+    }
   </style>
 </head>
 <body>
   <div id="log-panel"></div>
   <div id="hint">Инициализация…</div>
+  <img id="target-preview" alt="Target preview">
   <div id="ctrl">
     <button id="btn-ar">Start AR</button>
   </div>
