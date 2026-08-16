@@ -1,58 +1,60 @@
 export class UI {
   constructor() {
+    this.btnCalibrate = document.getElementById('btn-calibrate');
+    this.btnAr = document.getElementById('btn-ar');
+    this.hint = document.getElementById('hint');
     this.logPanel = document.getElementById('log-panel');
     this.logToggle = document.getElementById('log-toggle');
-    this.btnAr = document.getElementById('btn-ar');
-    this.btnTest = document.getElementById('btn-test');
-    this.hint = document.getElementById('hint');
-    this.preview = document.getElementById('target-preview');
-    
-    this.logVisible = true;
-    
-    if (this.logToggle) {
+    this.targetPreview = document.getElementById('target-preview');
+
+    if (this.logToggle && this.logPanel) {
       this.logToggle.addEventListener('click', () => {
-        this.logVisible = !this.logVisible;
-        this.logPanel.classList.toggle('collapsed', !this.logVisible);
+        this.logPanel.classList.toggle('collapsed');
       });
     }
   }
 
-  log(msg, type = '') {
-    if (!this.logPanel) return;
-    const div = document.createElement('div');
-    div.className = 'entry ' + type;
-    const now = new Date();
-    const t = now.toLocaleTimeString('ru-RU', { hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
-    div.textContent = `[${t}] ${msg}`;
-    this.logPanel.appendChild(div);
-    this.logPanel.scrollTop = this.logPanel.scrollHeight;
-    console.log(`[${type || 'log'}] ${msg}`);
-  }
-
-  setHint(text) {
-    if (this.hint) this.hint.textContent = text;
-  }
-
+  // Восстановленный метод для превью таргета
   setPreview(src) {
-    if (this.preview) {
-      this.preview.src = src;
-      this.preview.style.display = 'block';
+    if (this.targetPreview) {
+      this.targetPreview.src = src;
+      this.targetPreview.style.display = 'block';
     }
   }
 
-  enableArButton() {
-    if (this.btnAr) this.btnAr.disabled = false;
+  enableCalibrateButton(handler) {
+    if (!this.btnCalibrate) return;
+    this.btnCalibrate.disabled = false;
+    this.btnCalibrate.onclick = handler;
+  }
+
+  disableCalibrateButton() {
+    if (this.btnCalibrate) this.btnCalibrate.disabled = true;
+  }
+
+  enableArButton(handler) {
+    if (!this.btnAr) return;
+    this.btnAr.disabled = false;
+    this.btnAr.classList.add('success');
+    if (handler) this.btnAr.onclick = handler;
   }
 
   disableArButton() {
-    if (this.btnAr) this.btnAr.disabled = true;
+    if (!this.btnAr) return;
+    this.btnAr.disabled = true;
+    this.btnAr.classList.remove('success');
   }
 
-  onStartAR(handler) {
-    if (this.btnAr) this.btnAr.addEventListener('click', handler);
+  setHint(text) {
+    if (this.hint) this.hint.innerText = text;
   }
 
-  onTestAnchor(handler) {
-    if (this.btnTest) this.btnTest.addEventListener('click', handler);
+  log(msg, type = 'info') {
+    if (!this.logPanel) return;
+    const div = document.createElement('div');
+    div.className = `entry ${type}`;
+    div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    this.logPanel.appendChild(div);
+    this.logPanel.scrollTop = this.logPanel.scrollHeight;
   }
 }
