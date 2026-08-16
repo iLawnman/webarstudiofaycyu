@@ -1,185 +1,99 @@
+import * as THREE from 'three';
+
 export class ARScene {
   constructor(ui) {
     this.ui = ui;
-    this.canvas = document.createElement('canvas');
-    document.body.appendChild(this.canvas);
-
-    this.gl = this.canvas.getContext('webgl', { xrCompatible: true });
-    if (!this.gl) {
-      this.ui.log('WebGL не поддерживается', 'err');
-      return;
-    }
-
-    this.program = null;
-    this.floorBuffer = null;
-    this.floorVertexCount = 0;
+    this.scene = new THREE.Scene();
     
-    this.cubeBuffer = null;
-    this.cubeVertexCount = 0;
+    // Корневая группа, привязанная к откалиброванному полу
+    this.floorGroup = new THREE.Group();
+    this.scene.add(this.floorGroup);
 
-    this.nodes = [];
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.gl = this.renderer.getContext();
 
-    this.initGL();
+    this.camera = new THREE.PerspectiveCamera();
+    this.buildingGroup = null;
+
+    this.initLights();
   }
 
-  initGL() {
-    const gl = this.gl;
+  initLights() {
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+    hemiLight.position.set(0, 10, 0);
+    this.scene.add(hemiLight);
 
-    const vsSource = `
-      attribute vec3 aPosition;
-      attribute vec3 aColor;
-      uniform mat4 uProjectionMatrix;
-      uniform mat4 uViewMatrix;
-      uniform mat4 uModelMatrix;
-      varying vec3 vColor;
-      void main() {
-        vColor = aColor;
-        gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * vec4(aPosition, 1.0);
-      }
-    `;
-
-    const fsSource = `
-      precision mediump float;
-      varying vec3 vColor;
-      void main() {
-        gl_FragColor = vec4(vColor, 1.0);
-      }
-    `;
-
-    const vs = this.compileShader(gl.VERTEX_SHADER, vsSource);
-    const fs = this.compileShader(gl.FRAGMENT_SHADER, fsSource);
-    
-    this.program = gl.createProgram();
-    gl.attachShader(this.program, vs);
-    gl.attachShader(this.program, fs);
-    gl.linkProgram(this.program);
-
-    this.attribs = {
-      position: gl.getAttribLocation(this.program, 'aPosition'),
-      color: gl.getAttribLocation(this.program, 'aColor')
-    };
-
-    this.uniforms = {
-      projectionMatrix: gl.getUniformLocation(this.program, 'uProjectionMatrix'),
-      viewMatrix: gl.getUniformLocation(this.program, 'uViewMatrix'),
-      modelMatrix: gl.getUniformLocation(this.program, 'uModelMatrix')
-    };
-
-    this.setupFloorBuffer();
-    this.setupCubeBuffer();
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(2, 5, 2);
+    this.scene.add(dirLight);
   }
 
-  compileShader(type, source) {
-    const gl = this.gl;
-    const shader = gl.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      this.ui.log('Shader error: ' + gl.getShaderInfoLog(shader), 'err');
-      return null;
+  // Применяем зафиксированную матрицу калиброванного пола
+  setFloor(floorMatrix) {
+    this.floorGroup.matrix.copy(floorMatrix);
+    this.floorGroup.matrixAutoUpdate = false;
+
+    // Сетка на полу
+    const grid = new THREE.GridHelper(4, 12, 0x00ff88, 0x444444);
+    this.floorGroup.add(grid);
+
+    this.ui.log('Положение пола обновлено в Three.js сцене', 'ok');
+  }
+
+  // Визуальная анимация постройки сцены
+  startConstructionAnimation() {
+    if (this.buildingGroup) this.floorGroup.remove(this.buildingGroup);
+
+    this.buildingGroup = new THREE.Group();
+    this.floorGroup.add(this.buildingGroup);
+
+    const boxGeo = new THREE.BoxGeometry(0.25, 0.5, 0.25);
+    const matWire = new THREE.MeshStandardMaterial({ color: 0x00aeff, wireframe: true });
+    const matSolid = new THREE.MeshStandardMaterial({ color: 0x00aeff, transparent: true, opacity: 0.5 });
+
+    const coords = [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]];
+
+    coords.forEach(([x, z], i) => {
+      setTimeout(() => {
+        const pillar = new THREE.Group();
+        pillar.add(new THREE.Mesh(boxGeo, matWire));
+        pillar.add(new THREE.Mesh(boxGeo, matSolid));
+
+        pillar.position.set(x, 0, z);
+        pillar.scale.set(1, 0.01, 1);
+        this.buildingGroup.add(pillar);
+
+        let s = 0.01;
+        const interval = setInterval(() => {
+          s += 0.05;
+          pillar.scale.y = s;
+          pillar.position.y = (s * 0.5) / 2;
+          if (s >= 1) {
+            pillar.scale.y = 1;
+            pillar.position.y = 0.25;
+            clearInterval(interval);
+          }
+        }, 16);
+      }, i * 200);
+    });
+  }
+
+  updateAnimation() {
+    if (this.buildingGroup) {
+      this.buildingGroup.rotation.y += 0.003;
     }
-    return shader;
   }
 
-  setupFloorBuffer() {
-    const gl = this.gl;
-    const lines = [];
-    const size = 10;
-    const step = 1;
-
-    for (let i = -size; i <= size; i += step) {
-      lines.push(i, 0, -size,  0, 1, 0);
-      lines.push(i, 0,  size,  0, 1, 0);
-      lines.push(-size, 0, i,  0, 1, 0);
-      lines.push( size, 0, i,  0, 1, 0);
-    }
-
-    this.floorVertexCount = lines.length / 6;
-    this.floorBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.floorBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lines), gl.STATIC_DRAW);
-  }
-
-  setupCubeBuffer() {
-    const gl = this.gl;
-    const s = 0.05; // 5см размер кубика-маркера
-    const vertices = [
-      // X, Y, Z,  R, G, B
-      -s,-s, s,   1, 0, 1,   s,-s, s,   1, 0, 1,
-       s,-s, s,   1, 0, 1,   s, s, s,   1, 0, 1,
-       s, s, s,   1, 0, 1,  -s, s, s,   1, 0, 1,
-      -s, s, s,   1, 0, 1,  -s,-s, s,   1, 0, 1,
-
-      -s,-s,-s,   1, 0, 1,   s,-s,-s,   1, 0, 1,
-       s,-s,-s,   1, 0, 1,   s, s,-s,   1, 0, 1,
-       s, s,-s,   1, 0, 1,  -s, s,-s,   1, 0, 1,
-      -s, s,-s,   1, 0, 1,  -s,-s,-s,   1, 0, 1,
-
-      -s,-s,-s,   1, 0, 1,  -s,-s, s,   1, 0, 1,
-       s,-s,-s,   1, 0, 1,   s,-s, s,   1, 0, 1,
-       s, s,-s,   1, 0, 1,   s, s, s,   1, 0, 1,
-      -s, s,-s,   1, 0, 1,  -s, s, s,   1, 0, 1,
-    ];
-
-    this.cubeVertexCount = vertices.length / 6;
-    this.cubeBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.cubeBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-  }
-
-  createMarkerNode(color = [1, 0, 1]) {
-    return {
-      matrix: new Float32Array([
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1
-      ]),
-      color: color
-    };
-  }
-
-  addNode(node) {
-    this.nodes.push(node);
-  }
+  add(object) { this.scene.add(object); }
+  remove(object) { this.scene.remove(object); }
 
   renderView(projectionMatrix, viewMatrix) {
-    const gl = this.gl;
+    this.camera.projectionMatrix.fromArray(projectionMatrix);
+    this.camera.matrixWorldInverse.fromArray(viewMatrix);
+    this.camera.matrixWorld.copy(this.camera.matrixWorldInverse).invert();
 
-    gl.useProgram(this.program);
-    gl.uniformMatrix4fv(this.uniforms.projectionMatrix, false, projectionMatrix);
-    gl.uniformMatrix4fv(this.uniforms.viewMatrix, false, viewMatrix);
-
-    // 1. Отрисовка пола на Y = -1.0
-    const floorModelMatrix = new Float32Array([
-      1,  0,  0, 0,
-      0,  1,  0, 0,
-      0,  0,  1, 0,
-      0, -1,  0, 1
-    ]);
-
-    gl.uniformMatrix4fv(this.uniforms.modelMatrix, false, floorModelMatrix);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.floorBuffer);
-    
-    gl.enableVertexAttribArray(this.attribs.position);
-    gl.vertexAttribPointer(this.attribs.position, 3, gl.FLOAT, false, 24, 0);
-    gl.enableVertexAttribArray(this.attribs.color);
-    gl.vertexAttribPointer(this.attribs.color, 3, gl.FLOAT, false, 24, 12);
-
-    gl.drawArrays(gl.LINES, 0, this.floorVertexCount);
-
-    // 2. Отрисовка зарегистрированных узлов (маркеров трекинга)
-    if (this.nodes.length > 0) {
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.cubeBuffer);
-      gl.enableVertexAttribArray(this.attribs.position);
-      gl.vertexAttribPointer(this.attribs.position, 3, gl.FLOAT, false, 24, 0);
-      gl.enableVertexAttribArray(this.attribs.color);
-      gl.vertexAttribPointer(this.attribs.color, 3, gl.FLOAT, false, 24, 12);
-
-      for (const node of this.nodes) {
-        gl.uniformMatrix4fv(this.uniforms.modelMatrix, false, node.matrix);
-        gl.drawArrays(gl.LINES, 0, this.cubeVertexCount);
-      }
-    }
+    this.renderer.render(this.scene, this.camera);
   }
 }
