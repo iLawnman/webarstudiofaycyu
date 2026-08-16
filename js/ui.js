@@ -1,9 +1,9 @@
+// js/ui.js
 export class UI {
   constructor() {
     this.logPanel = document.getElementById('log-panel');
     this.logToggle = document.getElementById('log-toggle');
     this.btnAr = document.getElementById('btn-ar');
-    this.btnTest = document.getElementById('btn-test');
     this.hint = document.getElementById('hint');
     this.preview = document.getElementById('target-preview');
 
@@ -43,19 +43,7 @@ export class UI {
     this.btnAr.disabled = true;
   }
 
-  enableTestButton() {
-    this.btnTest.disabled = false;
-  }
-
-  disableTestButton() {
-    this.btnTest.disabled = true;
-  }
-
   onStartAR(handler) {
     this.btnAr.addEventListener('click', handler);
-  }
-
-  onTestAnchor(handler) {
-    this.btnTest.addEventListener('click', handler);
   }
 }

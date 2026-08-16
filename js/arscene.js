@@ -1,3 +1,4 @@
+// js/arscene.js
 import * as THREE from 'three';
 
 export class ARScene {
@@ -7,7 +8,6 @@ export class ARScene {
 
     this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-    // WebGLRenderer — чистый WebGL-контекст под WebXR
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
@@ -43,12 +43,10 @@ export class ARScene {
   }
 
   setupStaticFloor() {
-    // local-floor: Y = 0 — физический пол
     const gridHelper = new THREE.GridHelper(10, 20, 0x00ff00, 0x444444);
     gridHelper.position.set(0, 0, 0);
     this.scene.add(gridHelper);
 
-    // Тестовый куб на полу
     const boxGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
     const boxMat = new THREE.MeshNormalMaterial();
     const box = new THREE.Mesh(boxGeo, boxMat);
@@ -65,13 +63,7 @@ export class ARScene {
       emissive: color,
       emissiveIntensity: 0.15
     });
-    const mesh = new THREE.Mesh(geo, mat);
-    return mesh;
-  }
-
-  updateWorldMatrixFromPose(matrixArray) {
-    // Зарезервировано: если нужно двигать всю сцену относительно маркера
-    // (сейчас якоря создаются через createAnchor — предпочтительнее)
+    return new THREE.Mesh(geo, mat);
   }
 
   render() {
