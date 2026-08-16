@@ -15,7 +15,7 @@ export class ARScene {
     this.gl = this.renderer.getContext();
 
     this.camera = new THREE.PerspectiveCamera();
-    this.buildingGroup = null;
+    this.cubesGroup = null;
 
     this.initLights();
   }
@@ -35,54 +35,69 @@ export class ARScene {
     this.floorGroup.matrix.copy(floorMatrix);
     this.floorGroup.matrixAutoUpdate = false;
 
-    // Сетка на полу
-    const grid = new THREE.GridHelper(4, 12, 0x00ff88, 0x444444);
+    // Отображение сетки на установленном полу
+    const grid = new THREE.GridHelper(2, 10, 0x00ff88, 0x444444);
     this.floorGroup.add(grid);
 
-    this.ui.log('Положение пола обновлено в Three.js сцене', 'ok');
+    // Спавн кубов по углам
+    this.spawnCornerCubes();
+
+    this.ui.log('Пол зафиксирован. Кубы размещены по углам.', 'ok');
   }
 
-  // Визуальная анимация постройки сцены
-  startConstructionAnimation() {
-    if (this.buildingGroup) this.floorGroup.remove(this.buildingGroup);
+  // Создание и анимация 4 кубов по углам квадратной области (1x1 м)
+  spawnCornerCubes() {
+    if (this.cubesGroup) this.floorGroup.remove(this.cubesGroup);
 
-    this.buildingGroup = new THREE.Group();
-    this.floorGroup.add(this.buildingGroup);
+    this.cubesGroup = new THREE.Group();
+    this.floorGroup.add(this.cubesGroup);
 
-    const boxGeo = new THREE.BoxGeometry(0.25, 0.5, 0.25);
-    const matWire = new THREE.MeshStandardMaterial({ color: 0x00aeff, wireframe: true });
-    const matSolid = new THREE.MeshStandardMaterial({ color: 0x00aeff, transparent: true, opacity: 0.5 });
+    const cubeSize = 0.15; // 15см
+    const boxGeo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+    const boxMat = new THREE.MeshStandardMaterial({ 
+      color: 0x00aeff, 
+      roughness: 0.3,
+      metalness: 0.2
+    });
 
-    const coords = [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]];
+    // Углы квадрата со стороной 1 метр (+-0.5м от центра калибровки)
+    const corners = [
+      [-0.5, -0.5],
+      [ 0.5, -0.5],
+      [-0.5,  0.5],
+      [ 0.5,  0.5]
+    ];
 
-    coords.forEach(([x, z], i) => {
+    corners.forEach(([x, z], index) => {
+      const cube = new THREE.Mesh(boxGeo, boxMat);
+      
+      // Ставим куб точно НА пол (высота/2)
+      cube.position.set(x, cubeSize / 2, z);
+      cube.scale.set(0, 0, 0); // Начинаем с 0 для анимации
+      
+      this.cubesGroup.add(cube);
+
+      // Анимация появления кубов
       setTimeout(() => {
-        const pillar = new THREE.Group();
-        pillar.add(new THREE.Mesh(boxGeo, matWire));
-        pillar.add(new THREE.Mesh(boxGeo, matSolid));
-
-        pillar.position.set(x, 0, z);
-        pillar.scale.set(1, 0.01, 1);
-        this.buildingGroup.add(pillar);
-
-        let s = 0.01;
+        let progress = 0;
         const interval = setInterval(() => {
-          s += 0.05;
-          pillar.scale.y = s;
-          pillar.position.y = (s * 0.5) / 2;
-          if (s >= 1) {
-            pillar.scale.y = 1;
-            pillar.position.y = 0.25;
+          progress += 0.1;
+          cube.scale.set(progress, progress, progress);
+          if (progress >= 1) {
+            cube.scale.set(1, 1, 1);
             clearInterval(interval);
           }
         }, 16);
-      }, i * 200);
+      }, index * 150);
     });
   }
 
-  updateAnimation() {
-    if (this.buildingGroup) {
-      this.buildingGroup.rotation.y += 0.003;
+  updateAnimation(time) {
+    // Вращение кубов для наглядности активной сцены
+    if (this.cubesGroup) {
+      this.cubesGroup.children.forEach((cube) => {
+        cube.rotation.y += 0.01;
+      });
     }
   }
 
