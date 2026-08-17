@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>- Local AR Prefab Editor 3D</title>
+  <title>+ Local AR Prefab Editor 3D</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; height: 100vh; background: #1a1a1a; color: #ccc; overflow: hidden; }
@@ -294,7 +294,7 @@
   }
 
   function loadObjIntoGroup(group, src, placeholder) {
-    const path = src.startsWith('./assets/') ? src : './assets/' + src;
+    const path = src.startsWith('/assets/') ? src : '/assets/' + src;
     objLoader.load(path, obj => {
       if (placeholder && placeholder.parent === group) group.remove(placeholder);
       obj.traverse(child => {
@@ -466,6 +466,10 @@
       const rot = data.rotation.split(',').map(v => THREE.MathUtils.degToRad(parseFloat(v) || 0));
       if (rot.length === 3) mesh.rotation.set(rot[0], rot[1], rot[2]);
     }
+    if (data.scale) {
+      const scl = data.scale.split(',').map(Number);
+      if (scl.length === 3 && !scl.some(isNaN)) mesh.scale.set(scl[0], scl[1], scl[2]);
+    }
   }
 
   function loadLocalPrefab() {
@@ -560,6 +564,7 @@
     const container = document.getElementById('inspector-content');
     const obj = selectedObject;
     const pos = obj.position;
+    const scale = obj.scale;
 
     const rotDegX = THREE.MathUtils.radToDeg(obj.rotation.x);
     const rotDegY = THREE.MathUtils.radToDeg(obj.rotation.y);
@@ -584,6 +589,14 @@
             <div><input type="number" step="1" value="${rotDegX.toFixed(1)}" onchange="updateObjTransform('rot', 'x', this.value)"></div>
             <div><input type="number" step="1" value="${rotDegY.toFixed(1)}" onchange="updateObjTransform('rot', 'y', this.value)"></div>
             <div><input type="number" step="1" value="${rotDegZ.toFixed(1)}" onchange="updateObjTransform('rot', 'z', this.value)"></div>
+          </div>
+        </div>
+        <div class="prop-group">
+          <label>Масштаб (X, Y, Z)</label>
+          <div class="row">
+            <div><input type="number" step="0.01" value="${scale.x.toFixed(3)}" onchange="updateObjTransform('scale', 'x', this.value)"></div>
+            <div><input type="number" step="0.01" value="${scale.y.toFixed(3)}" onchange="updateObjTransform('scale', 'y', this.value)"></div>
+            <div><input type="number" step="0.01" value="${scale.z.toFixed(3)}" onchange="updateObjTransform('scale', 'z', this.value)"></div>
           </div>
         </div>
       `;
@@ -661,6 +674,7 @@
     const val = parseFloat(value) || 0;
     if (type === 'pos') selectedObject.position[axis] = val;
     if (type === 'rot') selectedObject.rotation[axis] = THREE.MathUtils.degToRad(val);
+    if (type === 'scale') selectedObject.scale[axis] = val || 0.001;
   }
 
   function updateInspectorFromTransform() {
@@ -862,6 +876,7 @@
       const rotDegY = THREE.MathUtils.radToDeg(obj.rotation.y);
       const rotDegZ = THREE.MathUtils.radToDeg(obj.rotation.z);
       const rot = `${rotDegX.toFixed(0)},${rotDegY.toFixed(0)},${rotDegZ.toFixed(0)}`;
+      const scl = `${obj.scale.x.toFixed(3)},${obj.scale.y.toFixed(3)},${obj.scale.z.toFixed(3)}`;
 
       if (obj.userData.type === 'object3d') {
         output += `  <model\n`;
@@ -869,6 +884,7 @@
         output += `    data-src="${obj.userData.src || ''}"\n`;
         output += `    data-position="${pos}"\n`;
         output += `    data-rotation="${rot}"\n`;
+        output += `    data-scale="${scl}"\n`;
         output += `  ></model>\n`;
       } else if (obj.userData.type === 'panel') {
         output += `  <panel\n`;
@@ -877,6 +893,7 @@
         output += `    data-height="0.2"\n`;
         output += `    data-position="${pos}"\n`;
         output += `    data-rotation="${rot}"\n`;
+        output += `    data-scale="${scl}"\n`;
         output += `  >\n`;
 
         output += `    <div class="panel">\n`;
@@ -900,6 +917,7 @@
         output += `    data-height="${obj.userData.height}"\n`;
         output += `    data-position="${pos}"\n`;
         output += `    data-rotation="${rot}"\n`;
+        output += `    data-scale="${scl}"\n`;
         output += `  ></video>\n`;
       } else if (obj.userData.type === 'html') {
         output += `  <htmlblock\n`;
@@ -909,6 +927,7 @@
         output += `    data-height="${obj.userData.height}"\n`;
         output += `    data-position="${pos}"\n`;
         output += `    data-rotation="${rot}"\n`;
+        output += `    data-scale="${scl}"\n`;
         output += `  ></htmlblock>\n`;
       }
     });
