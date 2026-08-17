@@ -64,7 +64,7 @@
     /* Typography */
     h1 { font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 700; line-height: 1.1; letter-spacing: -1px; }
     h2 { font-size: clamp(1.4rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0.5px; }
-    h3 { font-size: clamp(1rem, 1.5vw, 1.2rem); font-weight: 650; }
+    h3 { font-size: clamp(0.95rem, 1.4vw, 1.15rem); font-weight: 650; }
     p, li { font-size: clamp(0.85rem, 1.1vw, 0.95rem); color: var(--muted); line-height: 1.5; }
 
     .cyan { color: var(--cyan); }
@@ -76,7 +76,7 @@
       background: rgba(17, 24, 39, 0.82);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 20px;
+      padding: 16px;
       transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
     }
     .card:hover {
@@ -89,35 +89,11 @@
       content: "";
       position: absolute;
       top: -1px;
-      left: 20px;
-      right: 20px;
+      left: 16px;
+      right: 16px;
       height: 2px;
       background: linear-gradient(90deg, var(--indigo), var(--cyan));
       opacity: 0.75;
-    }
-
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 10px 24px;
-      border-radius: 8px;
-      background: rgba(99, 102, 241, .15);
-      color: #e2e8f0;
-      font-weight: 600;
-      font-size: 0.9rem;
-      text-decoration: none;
-      border: 1px solid rgba(99, 102, 241, .3);
-      cursor: pointer;
-      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
-      text-align: center;
-    }
-    .btn:hover {
-      color: #fff;
-      background: linear-gradient(135deg, rgba(99, 102, 241, .85), rgba(6, 182, 212, .75));
-      border-color: transparent;
-      transform: translateY(-2px);
     }
 
     /* Badge & Tags */
@@ -206,7 +182,7 @@
     /* Layout helpers */
     .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 1200px; }
     .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%; max-width: 1200px; }
-    .grid-3-2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 1200px; }
+    .grid-3-2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 1200px; }
 
     .step-num {
       width: 32px; height: 32px;
@@ -299,59 +275,72 @@
 
   <!-- SLIDE 2: (Объединенные Слайды 3 + 4) Применение и Конструктор -->
   <div class="slide" data-index="1">
-    <div style="max-width:1200px; width:100%; margin-bottom:16px;">
-      <h2>Сферы применения и работы</h2>
-      <p>Где используются квесты и как подготавливаются сценарии</p>
+    <div style="max-width:1200px; width:100%; margin-bottom:12px;">
+      <h2>Сферы применения и работа конструктора</h2>
+      <p style="font-size:0.85rem;">Локации использования и порядок подготовки сценариев</p>
     </div>
 
-    <!-- Сферы применения -->
-    <div class="grid-3-2" style="margin-bottom:24px;">
-      <div class="card" style="padding:14px;">
-        <div style="font-size:1.3rem; margin-bottom:4px;">🎮</div>
+    <!-- Полный список из 6 сфер применения -->
+    <div class="grid-3-2" style="margin-bottom:20px;">
+      <div class="card" style="padding:12px;">
+        <div style="font-size:1.2rem; margin-bottom:2px;">🎮</div>
         <h3>Ивенты и праздники</h3>
-        <p style="font-size:0.8rem;">Квесты для массовых и корпоративных мероприятий.</p>
+        <p style="font-size:0.75rem;">Увлекательные AR-квесты для массовых мероприятий и корпоративов.</p>
       </div>
-      <div class="card" style="padding:14px;">
-        <div style="font-size:1.3rem; margin-bottom:4px;">🏛</div>
+      <div class="card" style="padding:12px;">
+        <div style="font-size:1.2rem; margin-bottom:2px;">🏛</div>
         <h3>Музеи и выставки</h3>
-        <p style="font-size:0.8rem;">Оживающие экспонаты с медиа-контентом и озвучкой.</p>
+        <p style="font-size:0.75rem;">Оживающие экспонаты с дополнительным медиа-контентом и озвучкой.</p>
       </div>
-      <div class="card" style="padding:14px;">
-        <div style="font-size:1.3rem; margin-bottom:4px;">🌳</div>
-        <h3>Парки и город</h3>
-        <p style="font-size:0.8rem;">Маршруты с привязкой к меткам на местности.</p>
+      <div class="card" style="padding:12px;">
+        <div style="font-size:1.2rem; margin-bottom:2px;">🌳</div>
+        <h3>Парки и городская среда</h3>
+        <p style="font-size:0.75rem;">Маршруты с привязкой к меткам на открытом воздухе.</p>
+      </div>
+      <div class="card" style="padding:12px;">
+        <div style="font-size:1.2rem; margin-bottom:2px;">🏢</div>
+        <h3>Офисный онбординг</h3>
+        <p style="font-size:0.75rem;">Знакомство новых сотрудников с офисом в игровой форме.</p>
+      </div>
+      <div class="card" style="padding:12px;">
+        <div style="font-size:1.2rem; margin-bottom:2px;">🖼</div>
+        <h3>Виртуальные стенды</h3>
+        <p style="font-size:0.75rem;">Демонстрация продуктов в интерактивном 3D-пространстве.</p>
+      </div>
+      <div class="card" style="padding:12px;">
+        <div style="font-size:1.2rem; margin-bottom:2px;">✨</div>
+        <h3>Образование</h3>
+        <p style="font-size:0.75rem;">Интерактивные наглядные материалы и обучающие сценарии.</p>
       </div>
     </div>
 
     <!-- Как работает конструктор -->
-    <div style="max-width:1200px; width:100%; margin-bottom:12px;">
+    <div style="max-width:1200px; width:100%; margin-bottom:8px;">
       <h3 style="color:var(--cyan);">Как работает Конструктор Квестов</h3>
     </div>
 
-    <div class="grid-4" style="margin-bottom:20px;">
-      <div class="card" style="padding:14px;">
-        <div class="step-num" style="margin-bottom:8px;">01</div>
+    <div class="grid-4">
+      <div class="card" style="padding:12px;">
+        <div class="step-num" style="margin-bottom:6px;">01</div>
         <h3>Заполнение</h3>
-        <p style="font-size:0.75rem; margin-top:4px;">Задаются задания, подсказки и варианты ответов.</p>
+        <p style="font-size:0.75rem; margin-top:2px;">Задаются задания, подсказки и варианты ответов.</p>
       </div>
-      <div class="card" style="padding:14px;">
-        <div class="step-num" style="margin-bottom:8px;">02</div>
+      <div class="card" style="padding:12px;">
+        <div class="step-num" style="margin-bottom:6px;">02</div>
         <h3>Привязка 3D</h3>
-        <p style="font-size:0.75rem; margin-top:4px;">Указываются пути к 3D-моделям и AR-маркерам.</p>
+        <p style="font-size:0.75rem; margin-top:2px;">Указываются пути к 3D-моделям и AR-маркерам.</p>
       </div>
-      <div class="card" style="padding:14px;">
-        <div class="step-num" style="margin-bottom:8px;">03</div>
+      <div class="card" style="padding:12px;">
+        <div class="step-num" style="margin-bottom:6px;">03</div>
         <h3>Экспорт JSON</h3>
-        <p style="font-size:0.75rem; margin-top:4px;">Формируется готовый файл конфигурации.</p>
+        <p style="font-size:0.75rem; margin-top:2px;">Формируется готовый файл конфигурации.</p>
       </div>
-      <div class="card" style="padding:14px;">
-        <div class="step-num" style="margin-bottom:8px;">04</div>
+      <div class="card" style="padding:12px;">
+        <div class="step-num" style="margin-bottom:6px;">04</div>
         <h3>Загрузка в WebGL</h3>
-        <p style="font-size:0.75rem; margin-top:4px;">Контент подгружается и запускается по ссылке.</p>
+        <p style="font-size:0.75rem; margin-top:2px;">Контент подгружается и запускается по ссылке.</p>
       </div>
     </div>
-
-    <a href="index.html" class="btn">Вернуться на главную</a>
   </div>
 
 </div>
