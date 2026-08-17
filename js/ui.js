@@ -1,10 +1,9 @@
-// js/ui.js
-
 export class UI {
   constructor() {
     this.logPanel = document.getElementById('log-panel');
     this.logToggle = document.getElementById('log-toggle');
     this.btnAr = document.getElementById('btn-ar');
+    this.btnEndAr = document.getElementById('btn-end-ar');
     this.hint = document.getElementById('hint');
     this.preview = document.getElementById('target-preview');
 
@@ -38,13 +37,27 @@ export class UI {
 
   enableArButton() {
     this.btnAr.disabled = false;
+    this.btnAr.style.display = 'block';
   }
 
   disableArButton() {
     this.btnAr.disabled = true;
+    this.btnAr.style.display = 'none';
+  }
+
+  showEndArButton() {
+    this.btnEndAr.style.display = 'block';
+  }
+
+  hideEndArButton() {
+    this.btnEndAr.style.display = 'none';
   }
 
   onStartAR(handler) {
     this.btnAr.addEventListener('click', handler);
+  }
+
+  onEndAR(handler) {
+    this.btnEndAr.addEventListener('click', handler);
   }
 }

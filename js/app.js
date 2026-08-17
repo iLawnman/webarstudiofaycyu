@@ -1,8 +1,7 @@
-// js/app.js
 import { UI } from './ui.js';
 import { ImageRecognition } from './recognition.js';
 import { ARScene } from './arscene.js';
-import {playSound} from "./audio.js";
+import { playSound } from "./audio.js";
 
 export class App {
   constructor() {
@@ -22,7 +21,9 @@ export class App {
   async init() {
     this.ui.log('App init (WebGL / Three.js WebXR)...', 'info');
     await this.recognition.init();
+    
     this.ui.onStartAR(() => this.startAR());
+    this.ui.onEndAR(() => this.endAR());
 
     this.arScene.renderer.setAnimationLoop((timestamp, frame) => {
       this.onXRFrame(timestamp, frame);
@@ -86,6 +87,9 @@ export class App {
 
     await this.arScene.renderer.xr.setSession(this.xrSession);
     this.ui.log('Renderer session set (WebGL + local-floor)', 'ok');
+    
+    // Показываем кнопку End AR после успешного старта сессии
+    this.ui.showEndArButton();
     this.imageTrackingEnabled = true;
 
     this.recognition.attachInput(this.xrSession, this.arScene);
@@ -96,8 +100,17 @@ export class App {
       this.recognition.detachInput();
       this.xrSession = null;
       this.frameCount = 0;
+      
+      // Возвращаем UI в первоначальное состояние
+      this.ui.hideEndArButton();
       this.ui.enableArButton();
     });
+  }
+
+  async endAR() {
+    if (this.xrSession) {
+      await this.xrSession.end();
+    }
   }
 
   onXRFrame(timestamp, frame) {
