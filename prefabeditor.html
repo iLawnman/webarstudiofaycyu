@@ -273,6 +273,7 @@
 
     <input type="file" id="file-input" style="display:none" accept=".html,.template" onchange="handleFileSelect(event)">
     <input type="file" id="json-input" style="display:none" accept=".json" onchange="handleJsonDesignSelect(event)">
+    <select id="json-row-selector" style="display:none; margin-top:6px;" onchange="handleJsonRowChange(event)"></select>
   </div>
 
   <div class="section">
@@ -326,6 +327,68 @@
     if (p.startsWith('./')) return p;
     if (p.startsWith('/')) return '.' + p;
     return './assets/' + p;
+  }
+
+  // ---- JSON-дизайн: групповые панели (BackImage, BackGradient, TitleText_bg, ...) ----
+
+  const DESIGN_PROP_KEYS = ['font', 'color', 'image', 'fx', 'sound', 'text', 'prefab'];
+
+  function escapeAttr(str) {
+    return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+  }
+
+  // Строит текстуру-описание панели на основе её свойств (Font/Color/Image/FX/Sound/Text/Prefab)
+  function buildPropPanelVisual(props) {
+    const panelData = { bgColor: '#181830', borderColor: '#4a5568', elements: [], props };
+
+    if (props.color) {
+      const c = String(props.color).replace('#', '');
+      panelData.bgColor = /^[0-9a-fA-F]{6,8}$/.test(c) ? '#' + c.slice(0, 6) : panelData.bgColor;
+    }
+
+    let y = 26;
+    panelData.elements.push({ type: 'text', text: props.group || '', y, fontSize: 17, fontWeight: 'bold', color: '#ffd700' });
+    y += 26;
+
+    if (props.image) {
+      panelData.elements.push({ type: 'text', text: '[IMG] ' + String(props.image).split('/').pop(), y, fontSize: 13, color: '#7dd3fc' });
+      y += 20;
+    }
+    if (props.text) {
+      panelData.elements.push({ type: 'text', text: props.text, y, fontSize: 15, color: '#ffffff' });
+      y += 20;
+    }
+    if (props.font) {
+      panelData.elements.push({ type: 'text', text: 'Font: ' + props.font, y, fontSize: 12, color: '#94a3b8' });
+      y += 16;
+    }
+    if (props.fx) {
+      panelData.elements.push({ type: 'text', text: 'FX: ' + props.fx, y, fontSize: 12, color: '#94a3b8' });
+      y += 16;
+    }
+    if (props.sound) {
+      panelData.elements.push({ type: 'text', text: 'Sound: ' + props.sound, y, fontSize: 12, color: '#94a3b8' });
+      y += 16;
+    }
+    if (props.prefab) {
+      panelData.elements.push({ type: 'text', text: 'Prefab: ' + props.prefab, y, fontSize: 12, color: '#94a3b8' });
+      y += 16;
+    }
+
+    return panelData;
+  }
+
+  // Сериализует свойства группы обратно в HTML-разметку панели (для экспорта / hierarhии)
+  function serializePropPanelDiv(props) {
+    let attrs = `class="panel prop-panel" data-group="${escapeAttr(props.group || '')}"`;
+    DESIGN_PROP_KEYS.forEach(k => {
+      if (props[k]) attrs += ` data-${k}="${escapeAttr(props[k])}"`;
+    });
+    return `<div ${attrs}></div>`;
   }
 
   function init3D() {
@@ -424,16 +487,45 @@
     reader.readAsText(file);
   }
 
-  function buildDesignFromJson(jsonData) {
+  // Хранит все строки (варианты префаба) последнего загруженного JSON-дизайна
+  let lastJsonDesign = null;
+
+  function handleJsonRowChange(event) {
+    const rowIndex = parseInt(event.target.value, 10);
+    if (lastJsonDesign) buildDesignFromJson(lastJsonDesign, rowIndex);
+  }
+
+  function buildDesignFromJson(jsonData, rowIndex) {
     if (!Array.isArray(jsonData) || jsonData.length < 2) {
       alert('Неверный формат JSON-дизайна.');
       return;
     }
 
-    const headers = jsonData[0];
-    const values = jsonData[1];
+    lastJsonDesign = jsonData;
 
+    const headers = jsonData[0];
+    const dataRows = jsonData.slice(1);
+    const idx = Number.isInteger(rowIndex) ? rowIndex : 0;
+    const values = dataRows[idx] || dataRows[0];
+
+    // Селектор варианта префаба, если строк несколько (id/name у каждой строки свои)
+    const selectorEl = document.getElementById('json-row-selector');
+    if (selectorEl) {
+      if (dataRows.length > 1) {
+        selectorEl.style.display = '';
+        selectorEl.innerHTML = dataRows.map((row, i) => {
+          const label = row[0] || row[1] || ('Вариант ' + (i + 1));
+          return `<option value="${i}" ${i === idx ? 'selected' : ''}>${label}</option>`;
+        }).join('');
+      } else {
+        selectorEl.style.display = 'none';
+      }
+    }
+
+    // 1. Ключ вида "Имя_ЕщёИмя_Свойство" -> отрезаем текст за последним "_":
+    //    "имя группы" (панель) + "свойство" (Font/Color/Image/FX/Sound/Text/Prefab)
     const panelsMap = {};
+    const order = [];
 
     headers.forEach((header, index) => {
       const val = values[index];
@@ -444,68 +536,49 @@
       if (separatorIndex === -1) return;
 
       const panelName = header.substring(0, separatorIndex);
-      const propType = header.substring(separatorIndex + 1);
+      const propType = header.substring(separatorIndex + 1).toLowerCase();
+      if (!DESIGN_PROP_KEYS.includes(propType)) return;
 
       if (!panelsMap[panelName]) {
-        panelsMap[panelName] = {
-          name: panelName,
-          props: {}
-        };
+        panelsMap[panelName] = { group: panelName };
+        order.push(panelName);
       }
 
       let processedVal = val;
-      if (['Image', 'Prefab', 'FX'].includes(propType) || String(val).match(/\.(png|jpg|jpeg|obj|fbx|prefab)$/i)) {
+      if (['image', 'prefab'].includes(propType) || String(val).match(/\.(png|jpg|jpeg|obj|fbx|prefab)$/i)) {
         processedVal = normalizePath(String(val));
       }
 
-      panelsMap[panelName].props[propType] = processedVal;
+      panelsMap[panelName][propType] = processedVal;
     });
 
-    let innerTreeHtml = '';
+    if (order.length === 0) {
+      alert('В JSON не найдено ни одной группы панелей (проверьте формат ключей "Имя_Свойство").');
+      return;
+    }
 
-    Object.keys(panelsMap).forEach(panelName => {
-      const panel = panelsMap[panelName];
-      const props = panel.props;
+    // 2. Каждая группа = отдельная 3D-панель, раскладываем сеткой, чтобы не накладывались друг на друга
+    const cols = Math.max(1, Math.ceil(Math.sqrt(order.length)));
+    const rows = Math.ceil(order.length / cols);
+    const spacingX = 0.34;
+    const spacingY = 0.22;
+    const panelW = 0.3;
+    const panelH = 0.18;
 
-      let childrenHtml = '';
+    let panelsHtml = '';
+    order.forEach((panelName, i) => {
+      const props = panelsMap[panelName];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = (col - (cols - 1) / 2) * spacingX;
+      const y = ((rows - 1) / 2 - row) * spacingY;
 
-      if (props.Image) {
-        let imgAttrStr = `class="panel-image" src="${props.Image}" alt="${panelName}_img"`;
-        if (props.Color) imgAttrStr += ` data-color="${props.Color}"`;
-        if (props.FX) imgAttrStr += ` data-fx="${props.FX}"`;
-
-        childrenHtml += `\n      <img ${imgAttrStr} />`;
-      }
-
-      const hasTextSpecific = props.Font || props.Text || props.Prefab;
-      const needTextBlock = hasTextSpecific || (!props.Image && (props.Color || props.FX));
-
-      if (needTextBlock) {
-        let textAttrStr = `class="panel-text-block"`;
-        if (props.Font) textAttrStr += ` data-font="${props.Font}"`;
-        if (props.Color) textAttrStr += ` data-color="${props.Color}"`;
-        if (props.FX) textAttrStr += ` data-fx="${props.FX}"`;
-        if (props.Prefab) textAttrStr += ` data-prefab="${props.Prefab}"`;
-
-        const displayContent = props.Text ? props.Text : (props.Image ? '' : panelName);
-        if (displayContent || hasTextSpecific) {
-          childrenHtml += `\n      <div ${textAttrStr}>`;
-          childrenHtml += `\n        <span class="label-text">${displayContent}</span>`;
-          childrenHtml += `\n      </div>`;
-        }
-      }
-
-      innerTreeHtml += `    <div class="design-node panel-group" data-name="${panelName}">`;
-      innerTreeHtml += childrenHtml;
-      innerTreeHtml += `\n    </div>\n`;
+      panelsHtml += `  <panel name="${escapeAttr(panelName)}" data-width="${panelW}" data-height="${panelH}" data-position="${x.toFixed(3)},${y.toFixed(3)},0" data-rotation="0,0,0">\n`;
+      panelsHtml += `    ${serializePropPanelDiv(props)}\n`;
+      panelsHtml += `  </panel>\n`;
     });
 
-    const generatedTemplate = `<template id="ar-target">
-  <panel name="artargetprefab" data-width="0.3" data-height="0.4" data-position="0,0.1,0" data-rotation="0,0,0">
-    <div class="panel artarget-root">
-${innerTreeHtml}    </div>
-  </panel>
-</template>`;
+    const generatedTemplate = `<template id="ar-target">\n${panelsHtml}</template>`;
 
     parseAndBuildPrefab(generatedTemplate);
   }
@@ -752,6 +825,22 @@ ${innerTreeHtml}    </div>
     const panelData = { bgColor: '#0a0a30', borderColor: '#00ffaa', elements: [] };
     if (!html) return panelData;
 
+    if (html.includes('prop-panel')) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+      const el = doc.querySelector('.prop-panel');
+      const props = {};
+      if (el) {
+        for (const attr of Array.from(el.attributes)) {
+          if (attr.name.startsWith('data-')) {
+            const key = attr.name.slice(5);
+            props[key] = attr.value;
+          }
+        }
+      }
+      return buildPropPanelVisual(props);
+    }
+
     if (html.includes('artarget-root')) {
       panelData.bgColor = '#141428';
       panelData.borderColor = '#FFD700';
@@ -994,7 +1083,29 @@ ${innerTreeHtml}    </div>
         </div>
       `;
 
-    if (obj.userData.type === 'panel') {
+    if (obj.userData.type === 'panel' && obj.userData.panelData && obj.userData.panelData.props) {
+      const props = obj.userData.panelData.props;
+      html += `
+          <hr style="border-color:#3c3c3c; margin: 12px 0;">
+          <div class="prop-group">
+            <h3>Группа из JSON-дизайна: ${props.group || ''}</h3>
+            <label>Font</label>
+            <input type="text" value="${props.font || ''}" onchange="updateDesignPanelProp('font', this.value)">
+            <label>Color (HEX, без #)</label>
+            <input type="text" value="${props.color || ''}" onchange="updateDesignPanelProp('color', this.value)">
+            <label>Image</label>
+            <input type="text" value="${props.image || ''}" onchange="updateDesignPanelProp('image', this.value)">
+            <label>FX</label>
+            <input type="text" value="${props.fx || ''}" onchange="updateDesignPanelProp('fx', this.value)">
+            <label>Sound</label>
+            <input type="text" value="${props.sound || ''}" onchange="updateDesignPanelProp('sound', this.value)">
+            <label>Text</label>
+            <input type="text" value="${props.text || ''}" onchange="updateDesignPanelProp('text', this.value)">
+            <label>Prefab</label>
+            <input type="text" value="${props.prefab || ''}" onchange="updateDesignPanelProp('prefab', this.value)">
+          </div>
+        `;
+    } else if (obj.userData.type === 'panel') {
       html += `
           <hr style="border-color:#3c3c3c; margin: 12px 0;">
           <div class="prop-group">
@@ -1050,7 +1161,7 @@ ${innerTreeHtml}    </div>
     html += `<button class="btn-danger" onclick="deleteSelectedObject()" style="margin-top:16px; width:100%;">Удалить объект</button>`;
     container.innerHTML = html;
 
-    if (obj.userData.type === 'panel') {
+    if (obj.userData.type === 'panel' && !(obj.userData.panelData && obj.userData.panelData.props)) {
       renderUIElementsList();
     }
   }
@@ -1167,6 +1278,27 @@ ${innerTreeHtml}    </div>
     const texture = renderPanelToCanvas(obj.userData.panelData);
     obj.material.map = texture;
     obj.material.needsUpdate = true;
+  }
+
+  // Редактирование свойств панели, сгенерированной из JSON-дизайна (Font/Color/Image/FX/Sound/Text/Prefab)
+  function updateDesignPanelProp(key, value) {
+    if (!selectedObject || !selectedObject.userData.panelData || !selectedObject.userData.panelData.props) return;
+    const props = selectedObject.userData.panelData.props;
+
+    if (key === 'image' || key === 'prefab') {
+      value = value ? normalizePath(value) : '';
+    }
+
+    if (value) {
+      props[key] = value;
+    } else {
+      delete props[key];
+    }
+
+    const newPanelData = buildPropPanelVisual(props);
+    selectedObject.userData.panelData = newPanelData;
+    selectedObject.userData.innerHTML = serializePropPanelDiv(props);
+    refreshPanelTexture(selectedObject);
   }
 
   function updateObjectProp(key, value) {
