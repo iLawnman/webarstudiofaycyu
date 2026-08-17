@@ -3,35 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR Quest Constructor — Презентация и Конструктор</title>
+  <title>О платформе — AR Quest WebGL</title>
   <style>
     :root {
-      --bg: #0D1117;
-      --card: #161B22;
-      --text: #F0F6FC;
-      --text2: #8B949E;
-      --cyan: #00F0FF;
-      --purple: #7B2CBF;
-      --success: #2EA043;
-      --orange: #F78166;
-      --yellow: #D29922;
-      --border: #30363D;
-      --input-bg: #0d121d;
-      --accent-amber: #f59e0b;
-      --danger: #ef4444;
+      --bg: #0b1120;
+      --bg-light: #111827;
+      --card: #111827;
+      --border: rgba(148, 163, 184, .16);
+      --border-hover: rgba(129, 140, 248, .45);
+
+      --text: #f8fafc;
+      --muted: #94a3b8;
+
+      --indigo: #6366f1;
+      --cyan: #06b6d4;
+      --gold: #daa520;
+      --success: #10b981;
     }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
       width: 100%; height: 100%;
-      background: var(--bg);
+      background:
+        radial-gradient(
+          circle at 50% -20%,
+          rgba(99, 102, 241, .16),
+          transparent 45%
+        ),
+        var(--bg);
       color: var(--text);
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       overflow: hidden;
     }
+
     #presentation {
       width: 100vw; height: 100vh;
       position: relative;
     }
+
     .slide {
       position: absolute;
       top: 0; left: 0;
@@ -42,11 +51,6 @@
       opacity: 0; pointer-events: none;
       transform: translateX(100px);
       transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-      background:
-              linear-gradient(rgba(13,17,23,0.97), rgba(13,17,23,0.97)),
-              repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(26,31,39,0.5) 60px),
-              repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(26,31,39,0.5) 60px);
-      background-size: 100% 100%, 60px 60px, 60px 60px;
       overflow-y: auto;
     }
     .slide.active {
@@ -58,79 +62,85 @@
     }
 
     /* Typography */
-    h1 { font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 700; line-height: 1.1; }
-    h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 700; }
-    h3 { font-size: clamp(1.1rem, 2vw, 1.5rem); font-weight: 600; }
-    p, li { font-size: clamp(0.9rem, 1.2vw, 1.1rem); color: var(--text2); line-height: 1.5; }
+    h1 { font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 700; line-height: 1.1; letter-spacing: -1px; }
+    h2 { font-size: clamp(1.4rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0.5px; }
+    h3 { font-size: clamp(1rem, 1.5vw, 1.2rem); font-weight: 650; }
+    p, li { font-size: clamp(0.85rem, 1.1vw, 0.95rem); color: var(--muted); line-height: 1.5; }
+
     .cyan { color: var(--cyan); }
-    .purple { color: var(--purple); }
-    .success { color: var(--success); }
-    .orange { color: var(--orange); }
-    .yellow { color: var(--yellow); }
+    .indigo { color: #818cf8; }
 
     /* Cards */
     .card {
-      background: var(--card);
+      position: relative;
+      background: rgba(17, 24, 39, 0.82);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+      border-radius: 14px;
+      padding: 20px;
+      transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
     }
     .card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 32px rgba(0,240,255,0.08);
-      border-color: var(--cyan);
+      border-color: var(--border-hover);
+      background: rgba(20, 29, 46, 0.95);
     }
-    .card-accent { border-width: 2px; }
-    .card-accent.cyan-border { border-color: var(--cyan); }
-    .card-accent.purple-border { border-color: var(--purple); }
-    .card-accent.success-border { border-color: var(--success); }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      top: -1px;
+      left: 20px;
+      right: 20px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--indigo), var(--cyan));
+      opacity: 0.75;
+    }
 
     /* Buttons */
     .btn {
-      display: inline-block;
-      padding: 14px 32px;
-      border-radius: 28px;
-      background: linear-gradient(135deg, #00F0FF, #7B2CBF);
-      color: #000;
-      font-weight: 700;
-      font-size: 0.95rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 24px;
+      border-radius: 8px;
+      background: rgba(99, 102, 241, .15);
+      color: #e2e8f0;
+      font-weight: 600;
+      font-size: 0.9rem;
       text-decoration: none;
-      border: 2px solid var(--cyan);
+      border: 1px solid rgba(99, 102, 241, .3);
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
       text-align: center;
     }
     .btn:hover {
-      transform: scale(1.03);
-      box-shadow: 0 0 25px rgba(0,240,255,0.4);
-    }
-    .btn-small {
-      padding: 8px 18px;
-      border-radius: 20px;
-      font-size: 0.85rem;
+      color: #fff;
+      background: linear-gradient(135deg, rgba(99, 102, 241, .85), rgba(6, 182, 212, .75));
+      border-color: transparent;
+      transform: translateY(-2px);
     }
 
     /* Badge & Tags */
     .badge {
       display: inline-block;
-      padding: 8px 20px;
+      padding: 4px 12px;
       border-radius: 20px;
-      background: var(--purple);
-      color: #fff;
-      font-size: 0.85rem;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(129, 140, 248, 0.3);
+      color: #818cf8;
+      font-size: 0.8rem;
       font-weight: 600;
     }
     .tag {
       display: inline-block;
-      padding: 6px 14px;
-      border-radius: 16px;
-      background: #21262D;
-      border: 1px solid var(--cyan);
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(17, 24, 39, 0.9);
+      border: 1px solid var(--border);
       color: var(--cyan);
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 600;
-      margin: 4px;
+      margin: 2px;
     }
 
     /* Navigation */
@@ -138,9 +148,9 @@
       position: fixed;
       top: 50%;
       transform: translateY(-50%);
-      width: 56px; height: 56px;
+      width: 48px; height: 48px;
       border-radius: 50%;
-      background: var(--card);
+      background: rgba(17, 24, 39, 0.9);
       border: 1px solid var(--border);
       color: var(--text);
       font-size: 1.5rem;
@@ -150,9 +160,9 @@
       transition: all 0.3s;
     }
     .nav-arrow:hover {
-      background: var(--cyan);
-      color: #000;
-      box-shadow: 0 0 20px rgba(0,240,255,0.3);
+      background: var(--indigo);
+      border-color: var(--indigo);
+      color: #fff;
     }
     .nav-prev { left: 24px; }
     .nav-next { right: 24px; }
@@ -165,13 +175,13 @@
       display: flex;
       gap: 10px;
       z-index: 100;
-      background: rgba(13,17,23,0.8);
+      background: rgba(11, 17, 32, 0.8);
       padding: 8px 16px;
       border-radius: 20px;
       border: 1px solid var(--border);
     }
     .nav-dot {
-      width: 12px; height: 12px;
+      width: 10px; height: 10px;
       border-radius: 50%;
       background: var(--border);
       cursor: pointer;
@@ -179,232 +189,49 @@
     }
     .nav-dot.active {
       background: var(--cyan);
-      box-shadow: 0 0 12px var(--cyan);
-      width: 28px;
-      border-radius: 6px;
+      box-shadow: 0 0 10px var(--cyan);
+      width: 24px;
+      border-radius: 5px;
     }
 
     .slide-counter {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      color: var(--text2);
+      color: var(--muted);
       font-size: 0.85rem;
       z-index: 100;
     }
 
     /* Layout helpers */
-    .row { display: flex; gap: 32px; width: 100%; max-width: 1600px; }
-    .col { flex: 1; }
-    .col-2 { flex: 2; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; width: 100%; max-width: 1600px; }
-    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; width: 100%; max-width: 1600px; }
-    .grid-3-2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; max-width: 1600px; }
-
-    /* Phone mockup */
-    .phone-mockup {
-      width: 280px; height: 500px;
-      background: #1C1C1E;
-      border-radius: 36px;
-      border: 3px solid #2C2C2E;
-      padding: 12px;
-      position: relative;
-      box-shadow: 0 0 60px rgba(0,240,255,0.15);
-    }
-    .phone-screen {
-      width: 100%; height: 100%;
-      background: #000;
-      border-radius: 24px;
-      overflow: hidden;
-      position: relative;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-    }
-    .phone-notch {
-      width: 80px; height: 6px;
-      background: #333;
-      border-radius: 3px;
-      margin: 12px auto 0;
-    }
-    .phone-glow {
-      width: 120px; height: 120px;
-      border-radius: 50%;
-      background: radial-gradient(circle, var(--cyan), transparent 70%);
-      animation: pulse 3s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 0.8; }
-      50% { transform: scale(1.2); opacity: 1; }
-    }
-
-    .qr-box {
-      width: 140px; height: 140px;
-      background: #fff;
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      color: #000;
-      font-size: 0.75rem;
-      text-align: center;
-      margin: 0 auto;
-    }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 1200px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%; max-width: 1200px; }
+    .grid-3-2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 1200px; }
 
     .step-num {
-      width: 42px; height: 42px;
-      border-radius: 50%;
+      width: 32px; height: 32px;
+      border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-weight: 700;
-      font-size: 1.1rem;
-      color: #000;
+      font-size: 0.9rem;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      border: 1px solid rgba(129, 140, 248, 0.3);
       flex-shrink: 0;
     }
 
-    .arrow-down {
-      width: 0; height: 0;
-      border-left: 8px solid transparent;
-      border-right: 8px solid transparent;
-      border-top: 10px solid var(--text2);
-      margin: 2px auto;
-    }
-
-    .marker { color: var(--cyan); margin-right: 8px; }
-
-    /* Integrated Constructor Styles */
-    .constructor-container {
-      width: 100%;
-      max-width: 1600px;
-      text-align: left;
-    }
-    .constructor-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 16px;
-      margin-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-      gap: 16px;
-    }
-    .quest-nav-bar {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 16px;
-    }
-    .quest-nav-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--cyan);
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .quest-nav-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .quest-nav-chip {
-      background: var(--input-bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .quest-nav-chip:hover { border-color: var(--cyan); color: var(--cyan); }
-    .quest-nav-chip.active { background: var(--cyan); color: #000; border-color: var(--cyan); font-weight: 700; }
-    .drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: 8px;
-      padding: 12px;
-      text-align: center;
-      color: var(--text2);
-      margin-bottom: 16px;
-      background: rgba(22, 27, 34, 0.5);
-    }
-    .drop-zone.dragover { border-color: var(--cyan); background: rgba(0, 240, 255, 0.05); }
-    .quest-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 20px;
-    }
-    .quest-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 12px;
-      margin-bottom: 16px;
-    }
-    .quest-card-title { font-size: 18px; font-weight: 700; color: var(--cyan); }
-    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .section-subtitle {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: var(--text2);
-      margin: 14px 0 6px 0;
-      border-bottom: 1px dashed var(--border);
-      padding-bottom: 2px;
-    }
-    .form-group { margin-bottom: 8px; }
-    .form-label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 3px; }
-    .form-control {
-      width: 100%;
-      background: var(--input-bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 6px 8px;
-      color: var(--text);
-      font-size: 12px;
-      outline: none;
-    }
-    .form-control:focus { border-color: var(--cyan); }
-    textarea.form-control { resize: vertical; min-height: 45px; }
-    .answers-section {
-      margin-top: 16px;
-      background: rgba(13, 18, 29, 0.4);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 14px;
-    }
-    .answers-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    details.answer-accordion {
-      background: var(--input-bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      margin-bottom: 8px;
-      overflow: hidden;
-    }
-    details.answer-accordion summary {
-      padding: 10px 14px;
-      font-weight: 700;
-      color: var(--accent-amber);
-      cursor: pointer;
-      background: rgba(245, 158, 11, 0.05);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      list-style: none;
-    }
-    details.answer-accordion[open] summary { border-bottom: 1px solid var(--border); background: rgba(245, 158, 11, 0.1); }
-    .answer-content { padding: 14px; }
-    .btn-danger { background: transparent; border: none; color: var(--danger); cursor: pointer; font-size: 13px; font-weight: 600; }
-    input[type="file"] { display: none; }
+    .marker { color: var(--cyan); margin-right: 6px; }
 
     /* Responsive */
-    @media (max-width: 1200px) {
-      .slide { padding: 30px; }
+    @media (max-width: 1024px) {
+      .slide { padding: 40px 30px; }
       .grid-3, .grid-3-2, .grid-4 { grid-template-columns: repeat(2, 1fr); }
-      .row { flex-direction: column; }
     }
     @media (max-width: 768px) {
-      .grid-3, .grid-3-2, .grid-2, .grid-4 { grid-template-columns: 1fr; }
+      .grid-3, .grid-3-2, .grid-4 { grid-template-columns: 1fr; }
       .nav-arrow { display: none; }
-      .phone-mockup { width: 200px; height: 360px; }
     }
 
-    .fade-in { animation: fadeIn 0.8s ease forwards; opacity: 0; }
-    @keyframes fadeIn { to { opacity: 1; } }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   </style>
@@ -413,358 +240,118 @@
 
 <div id="presentation">
 
-  <!-- SLIDE 1: Cover -->
+  <!-- SLIDE 1: (Объединенные Слайды 1 + 2) Обзор и Возможности -->
   <div class="slide active" data-index="0">
-    <div class="row" style="align-items:center; gap:60px; margin:auto 0;">
-      <div class="col-2" style="max-width:750px;">
-        <div class="badge fade-in">Технический исполнитель AR-квестов</div>
-        <h1 style="margin-top:20px;" class="fade-in">AR-конструктор квестов</h1>
-        <p class="cyan" style="margin-top:12px; font-size:1.2rem;" class="fade-in">
-          Разработка под ключ для организаторов квестов и эвент-агентств
-        </p>
-        <div style="margin-top:24px;" class="fade-in">
-          <div style="margin-bottom:12px;"><span class="cyan" style="font-weight:700;">01</span> <strong style="color:var(--text);">Свой AR-конструктор</strong> — платформа для создания и запуска квестов</div>
-          <div style="margin-bottom:12px;"><span class="cyan" style="font-weight:700;">02</span> <strong style="color:var(--text);">2 готовых сценария</strong> — базовые квесты для быстрого старта</div>
-          <div style="margin-bottom:20px;"><span class="cyan" style="font-weight:700;">03</span> <strong style="color:var(--text);">Разработка на заказ</strong> — кастомные квесты под тематику клиента</div>
-        </div>
-        <div style="margin-bottom:24px;" class="fade-in">
-          <span class="tag">Video</span><span class="tag">VFX</span><span class="tag">Анимации</span>
-          <span class="tag">Live Update</span><span class="tag">Web Preview</span><span class="tag">XLS/CSV/JSON</span>
-        </div>
-        <button onclick="goToSlide(3)" class="btn fade-in">Открыть конструктор</button>
+    <div style="max-width:1200px; width:100%; margin-bottom:24px;">
+      <div class="badge">WebAR & WebGL Платформа</div>
+      <h1 style="margin-top:10px;">Интерактивные AR-квесты в браузере</h1>
+      <p class="cyan" style="margin-top:4px;">Запуск дополненной реальности без установки приложений</p>
+      <div style="margin-top:12px;">
+        <span class="tag">WebGL</span>
+        <span class="tag">Three.js</span>
+        <span class="tag">WebAR</span>
+        <span class="tag">VFX</span>
+        <span class="tag">Анимации</span>
       </div>
-      <div class="col" style="display:flex; justify-content:center;">
-        <div class="phone-mockup">
-          <div class="phone-screen">
-            <div class="phone-notch"></div>
-            <div style="margin-top:40px; color:var(--cyan); font-weight:700; font-size:1.1rem;">AR Quest</div>
-            <div class="phone-glow" style="margin-top:30px;"></div>
-            <div style="margin-top:40px; padding:8px 20px; background:var(--cyan); border-radius:18px; color:#000; font-weight:600; font-size:0.85rem;">Сканировать</div>
-          </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+          <div class="step-num">01</div>
+          <h3>Доступность</h3>
         </div>
+        <p style="margin-bottom:12px;">Работает прямо в мобильном браузере</p>
+        <ul style="list-style:none; padding:0;">
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>Без установок из AppStore/Google Play</li>
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>Быстрый запуск по QR-коду или ссылке</li>
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>Кроссплатформенность iOS и Android</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+          <div class="step-num">02</div>
+          <h3>WebGL Графика</h3>
+        </div>
+        <p style="margin-bottom:12px;">Качественная визуализация в реальном времени</p>
+        <ul style="list-style:none; padding:0;">
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>Интерактивные 3D-модели и персонажи</li>
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>Частицы, реалистичное освещение, VFX</li>
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>Видео-пространства и аудио гиды</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+          <div class="step-num">03</div>
+          <h3>Геймификация</h3>
+        </div>
+        <p style="margin-bottom:12px;">Гибкие сценарии взаимодействия</p>
+        <ul style="list-style:none; padding:0;">
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>AR-маркеры и пространственные точки</li>
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>Диалоги, загадки и ветвления</li>
+          <li style="margin-bottom:4px;"><span class="marker">▸</span>Динамический подгружаемый контент</li>
+        </ul>
       </div>
     </div>
   </div>
 
-  <!-- SLIDE 2: What I Offer -->
+  <!-- SLIDE 2: (Объединенные Слайды 3 + 4) Применение и Конструктор -->
   <div class="slide" data-index="1">
-    <h2 style="margin-bottom:6px;">Что я предлагаю</h2>
-    <p style="margin-bottom:24px;">Три формата сотрудничества для организаторов квестов</p>
-    <div class="grid-3">
-      <div class="card card-accent cyan-border">
-        <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
-          <div class="step-num" style="background:var(--cyan);">01</div>
-          <h3>AR-конструктор</h3>
-        </div>
-        <p style="margin-bottom:16px;">Своя платформа для создания богатых AR-квестов</p>
-        <ul style="list-style:none; padding:0;">
-          <li style="margin-bottom:6px;"><span class="marker">▸</span>Rich AR: видео, VFX, анимации</li>
-          <li style="margin-bottom:6px;"><span class="marker">▸</span>Подгрузка ассетов на лету</li>
-          <li style="margin-bottom:6px;"><span class="marker">▸</span>Предпросмотр в браузере без сборки</li>
-          <li style="margin-bottom:6px;"><span class="marker">▸</span>Live Update — без пересборки</li>
-          <li style="margin-bottom:6px;"><span class="marker">▸</span>Данные: XLS / CSV / JSON + Web UI</li>
-          <li style="margin-bottom:6px;"><span class="marker">▸</span>Визуальный редактор заданий</li>
-          <li style="margin-bottom:6px;"><span class="marker">▸</span>AR-маркеры, геолокация, 3D</li>
-        </ul>
-        <div style="margin-top:20px; padding:10px; background:#0D1117; border-radius:12px; border:1px solid var(--cyan); text-align:center;">
-          <strong style="color:var(--cyan);">От 120 000 ₽</strong>
-        </div>
-      </div>
-      <div class="card card-accent purple-border">
-        <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
-          <div class="step-num" style="background:var(--purple); color:#fff;">02</div>
-          <h3>2 готовых квеста</h3>
-        </div>
-        <p style="margin-bottom:16px;">Базовые сценарии с полным AR-контентом</p>
-        <ul style="list-style:none; padding:0;">
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--purple);">▸</span>Квест «Тайна старого города»</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--purple);">▸</span>Квест «Космическая одиссея»</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--purple);">▸</span>Готовые 3D-модели и анимации</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--purple);">▸</span>Видео-вставки и VFX-эффекты</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--purple);">▸</span>Настройка под ваш бренд</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--purple);">▸</span>Быстрый запуск — 1-2 дня</li>
-        </ul>
-        <div style="margin-top:20px; padding:10px; background:#0D1117; border-radius:12px; border:1px solid var(--purple); text-align:center;">
-          <strong style="color:var(--purple);">От 45 000 ₽</strong>
-        </div>
-      </div>
-      <div class="card card-accent success-border">
-        <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
-          <div class="step-num" style="background:var(--success);">03</div>
-          <h3>Разработка на заказ</h3>
-        </div>
-        <p style="margin-bottom:16px;">Кастомные квесты с премиум-контентом</p>
-        <ul style="list-style:none; padding:0;">
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--success);">▸</span>Уникальный сценарий под тематику</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--success);">▸</span>Премиум 3D, анимации, VFX</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--success);">▸</span>Видео-сопровождение заданий</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--success);">▸</span>Брендирование под заказчика</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--success);">▸</span>Полная техническая поддержка</li>
-          <li style="margin-bottom:6px;"><span class="marker" style="color:var(--success);">▸</span>Интеграция с вашими системами</li>
-        </ul>
-        <div style="margin-top:20px; padding:10px; background:#0D1117; border-radius:12px; border:1px solid var(--success); text-align:center;">
-          <strong style="color:var(--success);">Индивидуально</strong>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SLIDE 3: How Constructor Works -->
-  <div class="slide" data-index="2">
-    <h2 style="margin-bottom:6px;">Создание квеста — просто как таблица</h2>
-    <p style="margin-bottom:20px;">Основной упор на простоту и интуитивность. Одно приложение — сколько угодно квестов.</p>
-
-    <div class="row" style="align-items:flex-start; gap:32px; max-width:1600px; margin-bottom: 20px;">
-      <!-- Shell visualization & Button -->
-      <div style="width:380px; flex-shrink:0; display:flex; flex-direction:column; gap:16px;">
-        <div style="background:var(--card); border:2px solid var(--cyan); border-radius:20px; padding:20px;">
-          <h3 style="color:var(--cyan); margin-bottom:6px;">AR Quest Shell</h3>
-          <p style="margin-bottom:12px; font-size:0.85rem;">Одно приложение — сколько угодно квестов</p>
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <div style="background:#0D1117; border-radius:8px; padding:10px; display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span>🗝</span><span style="font-weight:600;">Тайна старого города</span><span style="margin-left:auto; color:var(--success); font-size:0.75rem; font-weight:600;">Готов</span>
-            </div>
-            <div style="background:#0D1117; border-radius:8px; padding:10px; display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span>🚀</span><span style="font-weight:600;">Космическая одиссея</span><span style="margin-left:auto; color:var(--success); font-size:0.75rem; font-weight:600;">Готов</span>
-            </div>
-            <div style="background:#0D1117; border-radius:8px; padding:10px; display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span>🎃</span><span style="font-weight:600;">Хэллоуин-квест</span><span style="margin-left:auto; color:var(--success); font-size:0.75rem; font-weight:600;">Готов</span>
-            </div>
-            <div style="background:#0D1117; border-radius:8px; padding:10px; display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span>🏢</span><span style="font-weight:600;">Корпоратив 'Альфа'</span><span style="margin-left:auto; color:var(--success); font-size:0.75rem; font-weight:600;">Готов</span>
-            </div>
-            <div style="background:#1a2332; border:1px dashed var(--yellow); border-radius:8px; padding:10px; display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span>➕</span><span style="font-weight:600; color:var(--yellow);">Свободный слот #5</span><span style="margin-left:auto; color:var(--yellow); font-size:0.75rem; font-weight:600;">Пусто</span>
-            </div>
-          </div>
-        </div>
-        <button onclick="goToSlide(3)" class="btn" style="width:100%;">⚙️ Открыть Конструктор</button>
-      </div>
-
-      <!-- 5 Steps -->
-      <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
-        <div style="display:flex; align-items:center; gap:14px;">
-          <div class="step-num" style="background:var(--cyan);">1</div>
-          <div>
-            <h3 style="font-size:1.1rem;">Выбери шаблон или создай с нуля</h3>
-            <p style="font-size:0.85rem;">Пустой проект или готовая заготовка</p>
-          </div>
-        </div>
-        <div class="arrow-down" style="margin-left:16px;"></div>
-        <div style="display:flex; align-items:center; gap:14px;">
-          <div class="step-num" style="background:var(--purple); color:#fff;">2</div>
-          <div>
-            <h3 style="font-size:1.1rem;">Заполни таблицы данных</h3>
-            <p style="font-size:0.85rem;">Логика • Вопросы-ответы • Оформление. Сам или отдай LLM — получишь JSON/CSV</p>
-          </div>
-        </div>
-        <div class="arrow-down" style="margin-left:16px;"></div>
-        <div style="display:flex; align-items:center; gap:14px;">
-          <div class="step-num" style="background:var(--orange); color:#fff;">3</div>
-          <div>
-            <h3 style="font-size:1.1rem;">Загрузи ресурсы</h3>
-            <p style="font-size:0.85rem;">Картинки, видео, 3D-модели на любой хостинг</p>
-          </div>
-        </div>
-        <div class="arrow-down" style="margin-left:16px;"></div>
-        <div style="display:flex; align-items:center; gap:14px;">
-          <div class="step-num" style="background:var(--success);">4</div>
-          <div>
-            <h3 style="font-size:1.1rem;">Вставь ссылку в слот</h3>
-            <p style="font-size:0.85rem;">Свободный слот в оболочке — одна ссылка = один квест</p>
-          </div>
-        </div>
-        <div class="arrow-down" style="margin-left:16px;"></div>
-        <div style="display:flex; align-items:center; gap:14px;">
-          <div class="step-num" style="background:var(--cyan);">5</div>
-          <div>
-            <h3 style="font-size:1.1rem;">Квест готов!</h3>
-            <p style="font-size:0.85rem;">Появляется в списке. При запуске — проверяет, грузит, играет.</p>
-          </div>
-        </div>
-      </div>
+    <div style="max-width:1200px; width:100%; margin-bottom:16px;">
+      <h2>Сферы применения и работы</h2>
+      <p>Где используются квесты и как подготавливаются сценарии</p>
     </div>
 
-    <!-- Integrated Footer Box -->
-    <div style="width:100%; max-width:1600px; background:var(--card); border:2px solid var(--cyan); border-radius:16px; padding:16px 24px;">
-      <p style="color:var(--text); font-weight:700; font-size:1rem; margin-bottom:4px;">Одно приложение — бесконечное число квестов</p>
-      <p style="font-size:0.85rem;">Не нужно собирать приложение под каждый квест. Просто вставь ссылку на данные — оболочка сама проверит, загрузит и запустит.</p>
-    </div>
-  </div>
-
-  <!-- SLIDE 4: Integrated Constructor Page -->
-  <div class="slide" data-index="3">
-    <div class="constructor-container">
-      <div class="constructor-header">
-        <div style="display:flex; align-items:center; gap:16px;">
-          <!-- Добавлена кнопка НАЗАД -->
-          <button class="btn btn-small" onclick="goToSlide(2)" style="background: var(--input-bg); border-color: var(--cyan); color: var(--cyan);">← НАЗАД В ПРЕЗЕНТАЦИЮ</button>
-          <h2 style="color: var(--cyan); font-size: 1.5rem;">🚀 Конструктор Квестов</h2>
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="btn btn-small" onclick="toggleAnswers(true)">📂 Развернуть</button>
-          <button class="btn btn-small" onclick="toggleAnswers(false)">📁 Свернуть</button>
-          <button class="btn btn-small" id="addQuestBtn" style="background:var(--success); border-color:var(--success); color:#fff;">+ Новый Квест</button>
-          <label class="btn btn-small" style="background:var(--card); border-color:var(--border); color:var(--text);">
-            📁 Загрузить JSON
-            <input type="file" id="jsonInput" accept=".json" multiple>
-          </label>
-          <button class="btn btn-small" id="exportBtn" style="background:var(--purple); border-color:var(--purple); color:#fff;">💾 Скачать JSON</button>
-        </div>
+    <!-- Сферы применения -->
+    <div class="grid-3-2" style="margin-bottom:24px;">
+      <div class="card" style="padding:14px;">
+        <div style="font-size:1.3rem; margin-bottom:4px;">🎮</div>
+        <h3>Ивенты и праздники</h3>
+        <p style="font-size:0.8rem;">Квесты для массовых и корпоративных мероприятий.</p>
       </div>
-
-      <!-- Drop Zone -->
-      <div class="drop-zone" id="dropZone">
-        Перетащите сюда JSON файлы (Questtable.json и Answers.json) или нажмите "Загрузить JSON"
-      </div>
-
-      <!-- Quest Switcher Nav -->
-      <div class="quest-nav-bar">
-        <div class="quest-nav-title">Выберите квест для редактирования:</div>
-        <div class="quest-nav-list" id="questNavList"></div>
-      </div>
-
-      <!-- Single Active Quest Container -->
-      <div id="questCardContainer"></div>
-    </div>
-  </div>
-
-  <!-- SLIDE 5: Quest Mechanics -->
-  <div class="slide" data-index="4">
-    <h2 style="margin-bottom:6px;">Квестовая механика — универсальный инструмент</h2>
-    <p style="margin-bottom:16px;">Внешний объект + дополнительные свойства = новый опыт. Не только игры.</p>
-
-    <div style="width:100%; max-width:1600px; background:var(--card); border:2px solid var(--cyan); border-radius:12px; padding:12px 20px; margin-bottom:16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-      <span style="font-size:1.1rem; font-weight:700;">Объект</span>
-      <span style="font-size:1.3rem; color:var(--cyan);">+</span>
-      <span style="font-size:1.1rem; font-weight:700; color:var(--cyan);">AR-свойства</span>
-      <span style="font-size:1.3rem;">=</span>
-      <span style="font-size:1.1rem; font-weight:700; color:var(--success);">Квестовая механика</span>
-      <span style="color:var(--text2); margin-left:auto; font-size:0.85rem;">— применяется везде</span>
-    </div>
-
-    <div class="grid-3-2" style="margin-bottom:16px;">
-      <div class="card" style="border-color:var(--cyan); padding:16px;">
-        <div style="font-size:1.8rem; margin-bottom:4px;">🎮</div>
-        <h3>Игры и развлечения</h3>
-        <p style="font-size:0.85rem;">Классические AR-квесты для ивентов, праздников, корпоративов</p>
-      </div>
-      <div class="card" style="border-color:var(--purple); padding:16px;">
-        <div style="font-size:1.8rem; margin-bottom:4px;">🏢</div>
-        <h3>Офисный онбординг</h3>
-        <p style="font-size:0.85rem;">Новый сотрудник проходит квест по офису, знакомится с командой</p>
-      </div>
-      <div class="card" style="border-color:var(--success); padding:16px;">
-        <div style="font-size:1.8rem; margin-bottom:4px;">🏛</div>
-        <h3>Экскурсии</h3>
-        <p style="font-size:0.85rem;">Здания, кампусы, заводы — любой объект становится интерактивным</p>
-      </div>
-      <div class="card" style="border-color:var(--orange); padding:16px;">
-        <div style="font-size:1.8rem; margin-bottom:4px;">🖼</div>
+      <div class="card" style="padding:14px;">
+        <div style="font-size:1.3rem; margin-bottom:4px;">🏛</div>
         <h3>Музеи и выставки</h3>
-        <p style="font-size:0.85rem;">AR-экспонаты с контентом: видео, голос, 3D-модели</p>
+        <p style="font-size:0.8rem;">Оживающие экспонаты с медиа-контентом и озвучкой.</p>
       </div>
-      <div class="card" style="border-color:var(--yellow); padding:16px;">
-        <div style="font-size:1.8rem; margin-bottom:4px;">🌍</div>
-        <h3>Виртуальные выставки</h3>
-        <p style="font-size:0.85rem;">В любом месте — парк, ТРЦ, улица. Размести точки и запусти.</p>
-      </div>
-      <div class="card" style="border-color:var(--cyan); padding:16px;">
-        <div style="font-size:1.8rem; margin-bottom:4px;">✨</div>
-        <h3>Придумай и запусти!</h3>
-        <p style="font-size:0.85rem;">Твоя идея + конструктор = новый продукт. Любой объект.</p>
+      <div class="card" style="padding:14px;">
+        <div style="font-size:1.3rem; margin-bottom:4px;">🌳</div>
+        <h3>Парки и город</h3>
+        <p style="font-size:0.8rem;">Маршруты с привязкой к меткам на местности.</p>
       </div>
     </div>
 
-    <!-- Integrated Footer Box -->
-    <div style="width:100%; max-width:1600px; background:var(--card); border:2px solid var(--success); border-radius:12px; padding:12px 20px;">
-      <p style="color:var(--text); font-weight:700; font-size:0.95rem; margin-bottom:2px;">Любой объект можно превратить в интерактивный опыт.</p>
-      <p style="font-size:0.85rem;">Офис, музей, завод, парк — выбирай объект, придумай сценарий, заполни таблицы, вставь ссылку.</p>
+    <!-- Как работает конструктор -->
+    <div style="max-width:1200px; width:100%; margin-bottom:12px;">
+      <h3 style="color:var(--cyan);">Как работает Конструктор Квестов</h3>
     </div>
-  </div>
 
-  <!-- SLIDE 6: Technologies -->
-  <div class="slide" data-index="5">
-    <h2 style="margin-bottom:6px;">Технологии и демо</h2>
-    <p style="margin-bottom:20px;">Стек, который обеспечивает rich AR, предпросмотр и live update</p>
-    <div class="grid-3">
-      <div class="card" style="display:flex; flex-direction:column; padding:20px;">
-        <h3 style="color:var(--cyan); margin-bottom:8px;">Three.js WebAR</h3>
-        <p style="margin-bottom:12px; font-size:0.85rem;">Браузерный AR без установки. Предпросмотр без сборки.</p>
-        <div class="qr-box" style="margin-bottom:12px;">
-          <div><div style="font-size:1.5rem;">📱</div><div>QR-код демо</div></div>
-        </div>
-        <ul style="list-style:none; padding:0; margin-top:auto; font-size:0.85rem;">
-          <li><span class="marker">▸</span>Работает в Chrome/Safari</li>
-          <li><span class="marker">▸</span>Live Update контента</li>
-        </ul>
-        <a href="QuestTreeDemo.html" target="_blank" class="btn btn-small" style="margin-top:12px;">Three.js демо</a>
+    <div class="grid-4" style="margin-bottom:20px;">
+      <div class="card" style="padding:14px;">
+        <div class="step-num" style="margin-bottom:8px;">01</div>
+        <h3>Заполнение</h3>
+        <p style="font-size:0.75rem; margin-top:4px;">Задаются задания, подсказки и варианты ответов.</p>
       </div>
-      <div class="card" style="display:flex; flex-direction:column; padding:20px;">
-        <h3 style="color:var(--purple); margin-bottom:8px;">Unity WebGL</h3>
-        <p style="margin-bottom:12px; font-size:0.85rem;">Высокое качество 3D, VFX, анимации. WebGL в браузере.</p>
-        <div class="qr-box" style="margin-bottom:12px;">
-          <div><div style="font-size:1.5rem;">🎮</div><div>QR-код демо</div></div>
-        </div>
-        <ul style="list-style:none; padding:0; margin-top:auto; font-size:0.85rem;">
-          <li><span class="marker" style="color:var(--purple);">▸</span>Премиум 3D и VFX</li>
-          <li><span class="marker" style="color:var(--purple);">▸</span>Эмуляция в браузере</li>
-        </ul>
-        <a href="QuestWebGlDemo.html" target="_blank" class="btn btn-small" style="margin-top:12px; background:linear-gradient(135deg, #7B2CBF, #9B4DDB); border-color:var(--purple);">WebGL демо</a>
+      <div class="card" style="padding:14px;">
+        <div class="step-num" style="margin-bottom:8px;">02</div>
+        <h3>Привязка 3D</h3>
+        <p style="font-size:0.75rem; margin-top:4px;">Указываются пути к 3D-моделям и AR-маркерам.</p>
       </div>
-      <div class="card" style="display:flex; flex-direction:column; padding:20px;">
-        <h3 style="color:var(--success); margin-bottom:8px;">ARKit / ARCore</h3>
-        <p style="margin-bottom:12px; font-size:0.85rem;">Нативные приложения для iOS и Android.</p>
-        <div class="qr-box" style="margin-bottom:12px;">
-          <div><div style="font-size:1.5rem;">📲</div><div>QR-код демо</div></div>
-        </div>
-        <ul style="list-style:none; padding:0; margin-top:auto; font-size:0.85rem;">
-          <li><span class="marker" style="color:var(--success);">▸</span>Максимальная скорость</li>
-          <li><span class="marker" style="color:var(--success);">▸</span>Офлайн-режим</li>
-        </ul>
-        <a href="QuestConstructorDemo.html" target="_blank" class="btn btn-small" style="margin-top:12px; background:linear-gradient(135deg, #2EA043, #3FB950); border-color:var(--success);">Нативное демо</a>
+      <div class="card" style="padding:14px;">
+        <div class="step-num" style="margin-bottom:8px;">03</div>
+        <h3>Экспорт JSON</h3>
+        <p style="font-size:0.75rem; margin-top:4px;">Формируется готовый файл конфигурации.</p>
+      </div>
+      <div class="card" style="padding:14px;">
+        <div class="step-num" style="margin-bottom:8px;">04</div>
+        <h3>Загрузка в WebGL</h3>
+        <p style="font-size:0.75rem; margin-top:4px;">Контент подгружается и запускается по ссылке.</p>
       </div>
     </div>
-  </div>
 
-  <!-- SLIDE 7: Contacts -->
-  <div class="slide" data-index="6">
-    <h2 style="margin-bottom:6px;">Начните сотрудничество</h2>
-    <p style="margin-bottom:20px;">Три шага к вашему первому AR-квесту с rich-контентом</p>
-    <div style="display:flex; gap:20px; margin-bottom:20px; max-width:1400px; width:100%;">
-      <div class="card" style="flex:1; display:flex; align-items:center; gap:16px; padding:16px;">
-        <div class="step-num" style="background:var(--cyan);">1</div>
-        <div>
-          <h3>Знакомство</h3>
-          <p style="font-size:0.85rem;">Демонстрация конструктора</p>
-        </div>
-      </div>
-      <div class="card" style="flex:1; display:flex; align-items:center; gap:16px; padding:16px;">
-        <div class="step-num" style="background:var(--purple); color:#fff;">2</div>
-        <div>
-          <h3>Выбор формата</h3>
-          <p style="font-size:0.85rem;">Конструктор / Квест</p>
-        </div>
-      </div>
-      <div class="card" style="flex:1; display:flex; align-items:center; gap:16px; padding:16px;">
-        <div class="step-num" style="background:var(--success);">3</div>
-        <div>
-          <h3>Запуск</h3>
-          <p style="font-size:0.85rem;">Первый ивент с VFX</p>
-        </div>
-      </div>
-    </div>
-    <div class="card" style="width:100%; max-width:1400px; margin-bottom:20px;">
-      <h3 style="margin-bottom:16px;">Контакты</h3>
-      <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;">
-        <div>📧 <strong>Email:</strong> <span style="color:var(--text2);">dev@ar-quests.ru</span></div>
-        <div>📱 <strong>Telegram:</strong> <span style="color:var(--text2);">@ar_quest_dev</span></div>
-        <div>🌐 <strong>Сайт:</strong> <span style="color:var(--text2);">ar-quests.ru</span></div>
-        <div>📍 <strong>Локация:</strong> <span style="color:var(--text2);">Удалённо по всему СНГ</span></div>
-      </div>
-    </div>
-    <a href="mailto:dev@ar-quests.ru" class="btn" style="margin-bottom:12px;">Обсудить проект — бесплатная консультация</a>
-    <p style="font-size:0.8rem; color:var(--text2);">Разработчик AR-квестов • Rich AR • Live Update • Предпросмотр в браузере</p>
+    <a href="index.html" class="btn">Вернуться на главную</a>
   </div>
 
 </div>
@@ -776,14 +363,9 @@
 <div class="nav-dots">
   <div class="nav-dot active" onclick="goToSlide(0)"></div>
   <div class="nav-dot" onclick="goToSlide(1)"></div>
-  <div class="nav-dot" onclick="goToSlide(2)"></div>
-  <div class="nav-dot" onclick="goToSlide(3)"></div>
-  <div class="nav-dot" onclick="goToSlide(4)"></div>
-  <div class="nav-dot" onclick="goToSlide(5)"></div>
-  <div class="nav-dot" onclick="goToSlide(6)"></div>
 </div>
 
-<div class="slide-counter"><span id="current">1</span> / 7</div>
+<div class="slide-counter"><span id="current">1</span> / 2</div>
 
 <script>
   /* Presentation Controller */
@@ -839,403 +421,8 @@
     }
   });
 
-  /* Constructor Logic */
-  const QUEST_FIELDS = [
-    "id", "QuestID", "BasePrefab", "GoalIndex", "GoalImage", "RecognitionImage",
-    "SignImage", "Question", "Task", "AnswerList", "Timer", "RightWayIndx",
-    "RightWayQuest", "RightReactionSign", "RightReaction", "WrongWayQuest",
-    "WrongReactionSign", "WrongReaction", "Artefact", "NextWayQuest", "DistanceTimer"
-  ];
-
-  const ANSWER_FIELDS = [
-    "id", "AnswerID", "AnswerType", "Question", "MainTxt_Text", "VideoLink_VideoLink",
-    "VideoType_VideoType", "MainText_Decor_2lines_Image", "MainText_4corner_decor_Image",
-    "MainText_Decor_IfEmpty_Image", "AdditionalImg_Image", "TitleText_Text",
-    "TitleBackEmptyImg_Image", "HelpUpText_Text", "HelpDownText_Text",
-    "LeftPanel_If_Title_Empty_Image", "AnswerPicture_Image", "RightPanel_If_Title_Empty_Image",
-    "AdditionalPrefab_Prefab", "Sound_Sound", "Music_Music", "StartAnimation_Animation",
-    "IdleAnimation_Animation", "DeleteAnimation_Animation"
-  ];
-
-  let questTableRaw = [
-    ["id","QuestID","BasePrefab","GoalIndex","GoalImage","RecognitionImage","SignImage","Question","Task","AnswerList","Timer","RightWayIndx","RightWayQuest","RightReactionSign","RightReaction","WrongWayQuest","WrongReactionSign","WrongReaction","Artefact","NextWayQuest","DistanceTimer"],
-    ["Start","Start","BasePrefabQuestions","0","","T1","T1","...Ваня, владелец кафешки, говорит, что уже 2 дня Аленку не видел.","1","A01, A02, A03, A04","5","1, 2, 3","Q03","Back2","Голова - всему начало!","Q03","Back4","Эх, просто сказка сказывается...","","","5"]
-  ];
-
-  let answersRaw = [
-    ["id","AnswerID","AnswerType","Question","MainTxt_Text","VideoLink_VideoLink","VideoType_VideoType","MainText_Decor_2lines_Image","MainText_4corner_decor_Image","MainText_Decor_IfEmpty_Image","AdditionalImg_Image","TitleText_Text","TitleBackEmptyImg_Image","HelpUpText_Text","HelpDownText_Text","LeftPanel_If_Title_Empty_Image","AnswerPicture_Image","RightPanel_If_Title_Empty_Image","AdditionalPrefab_Prefab","Sound_Sound","Music_Music","StartAnimation_Animation","IdleAnimation_Animation","DeleteAnimation_Animation"],
-    ["A01","A01","Slide","","Прямо пойдешь...","","","1","1","Back1","","Первое задание - тренировочное","","Когда найдено испытание...","Перед наведением...","1","","1","","q1sound_oneshot","Q1music_loop","","",""]
-  ];
-
-  function arrayToObjects(arr) {
-    if (!arr || arr.length < 2) return [];
-    const headers = arr[0];
-    return arr.slice(1).map(row => {
-      let obj = {};
-      headers.forEach((h, i) => {
-        obj[h] = row[i] !== undefined ? row[i] : "";
-      });
-      return obj;
-    });
-  }
-
-  function objectsToArray(objs, headers) {
-    let result = [headers];
-    objs.forEach(obj => {
-      let row = headers.map(h => obj[h] !== undefined ? obj[h] : "");
-      result.push(row);
-    });
-    return result;
-  }
-
-  let quests = arrayToObjects(questTableRaw);
-  let answers = arrayToObjects(answersRaw);
-  let activeQuestIndex = 0;
-
-  function renderQuestNav() {
-    const navContainer = document.getElementById('questNavList');
-    if(!navContainer) return;
-    navContainer.innerHTML = '';
-
-    quests.forEach((q, idx) => {
-      const chip = document.createElement('button');
-      chip.className = `quest-nav-chip ${idx === activeQuestIndex ? 'active' : ''}`;
-      chip.innerText = `Квест #${idx + 1}: ${q.QuestID || 'Без ID'}`;
-      chip.onclick = () => {
-        activeQuestIndex = idx;
-        renderQuestNav();
-        renderActiveQuest();
-      };
-      navContainer.appendChild(chip);
-    });
-  }
-
-  function renderActiveQuest() {
-    const container = document.getElementById('questCardContainer');
-    if(!container) return;
-    container.innerHTML = '';
-
-    if (quests.length === 0 || !quests[activeQuestIndex]) {
-      container.innerHTML = '<p style="color: var(--text2);">Квесты отсутствуют. Нажмите "+ Новый Квест", чтобы создать.</p>';
-      return;
-    }
-
-    const q = quests[activeQuestIndex];
-    const answerIds = (q.AnswerList || '').split(',').map(s => s.trim()).filter(Boolean);
-
-    const card = document.createElement('div');
-    card.className = 'quest-card';
-
-    card.innerHTML = `
-      <div class="quest-card-header">
-        <div class="quest-card-title">📌 Настройки Квеста #${activeQuestIndex + 1} (ID: ${escapeHtml(q.QuestID || 'Не задан')})</div>
-        <button class="btn-danger" onclick="removeActiveQuest()">Удалить квест ✕</button>
-      </div>
-
-      <div class="section-subtitle">Основные свойства</div>
-      <div class="grid-4">
-        ${renderInput('id', q.id, 'id')}
-        ${renderInput('QuestID', q.QuestID, 'QuestID')}
-        ${renderInput('BasePrefab', q.BasePrefab, 'BasePrefab')}
-        ${renderInput('Task', q.Task, 'Task')}
-      </div>
-
-      <div class="section-subtitle">AR, Метки и Графика</div>
-      <div class="grid-4">
-        ${renderInput('GoalIndex', q.GoalIndex, 'GoalIndex')}
-        ${renderInput('GoalImage', q.GoalImage, 'GoalImage')}
-        ${renderInput('RecognitionImage', q.RecognitionImage, 'RecognitionImage')}
-        ${renderInput('SignImage', q.SignImage, 'SignImage')}
-      </div>
-
-      <div class="section-subtitle">Тексты и Таймеры</div>
-      <div class="grid-2">
-        ${renderTextarea('Question', q.Question, 'Question (Текст вопроса)')}
-        ${renderTextarea('Artefact', q.Artefact, 'Artefact')}
-      </div>
-      <div class="grid-4" style="margin-top: 6px;">
-        ${renderInput('AnswerList', q.AnswerList, 'AnswerList (Список ответов)')}
-        ${renderInput('Timer', q.Timer, 'Timer')}
-        ${renderInput('DistanceTimer', q.DistanceTimer, 'DistanceTimer')}
-        ${renderInput('NextWayQuest', q.NextWayQuest, 'NextWayQuest')}
-      </div>
-
-      <div class="section-subtitle">Логика веток (Успех / Ошибка)</div>
-      <div class="grid-3" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
-        ${renderInput('RightWayIndx', q.RightWayIndx, 'RightWayIndx')}
-        ${renderInput('RightWayQuest', q.RightWayQuest, 'RightWayQuest')}
-        ${renderInput('RightReactionSign', q.RightReactionSign, 'RightReactionSign')}
-      </div>
-      <div class="grid-2" style="margin-top: 6px;">
-        ${renderTextarea('RightReaction', q.RightReaction, 'RightReaction')}
-        ${renderTextarea('WrongReaction', q.WrongReaction, 'WrongReaction')}
-      </div>
-      <div class="grid-2" style="margin-top: 6px;">
-        ${renderInput('WrongWayQuest', q.WrongWayQuest, 'WrongWayQuest')}
-        ${renderInput('WrongReactionSign', q.WrongReactionSign, 'WrongReactionSign')}
-      </div>
-
-      <div class="answers-section">
-        <div class="answers-header">
-          <strong style="color: var(--accent-amber);">🎯 Варианты ответов (${answerIds.length})</strong>
-          <button class="btn btn-small" style="padding: 4px 8px;" onclick="addAnswerToQuest()">+ Добавить ответ</button>
-        </div>
-        <div id="answersContainer">
-          ${renderAnswersDropdowns(answerIds)}
-        </div>
-      </div>
-    `;
-
-    container.appendChild(card);
-  }
-
-  function renderInput(field, value, label) {
-    return `
-      <div class="form-group">
-        <label class="form-label">${label}</label>
-        <input type="text" class="form-control" value="${escapeHtml(value || '')}" oninput="updateQuestField('${field}', this.value)">
-      </div>
-    `;
-  }
-
-  function renderTextarea(field, value, label) {
-    return `
-      <div class="form-group">
-        <label class="form-label">${label}</label>
-        <textarea class="form-control" oninput="updateQuestField('${field}', this.value)">${escapeHtml(value || '')}</textarea>
-      </div>
-    `;
-  }
-
-  function renderAnswersDropdowns(answerIds) {
-    if (answerIds.length === 0) {
-      return '<p style="color: var(--text2); font-size: 11px;">Нет привязанных ответов. Укажите ID в поле AnswerList или нажмите "+ Добавить ответ"</p>';
-    }
-
-    return answerIds.map((ansId, aIdx) => {
-      let ansObj = answers.find(a => a.AnswerID === ansId);
-      if (!ansObj) {
-        ansObj = { id: ansId, AnswerID: ansId };
-        ANSWER_FIELDS.forEach(f => { if(!ansObj[f]) ansObj[f] = ""; });
-        answers.push(ansObj);
-      }
-
-      return `
-        <details class="answer-accordion">
-          <summary>
-            <span>🔻 Ответ #${aIdx + 1}: ID [${ansId}] — ${escapeHtml(ansObj.AnswerType || 'Без типа')} | ${escapeHtml((ansObj.MainTxt_Text || '').slice(0, 35))}...</span>
-            <button class="btn-danger" onclick="removeAnswerFromQuest('${ansId}')">✕ Удалить</button>
-          </summary>
-          <div class="answer-content">
-            <div class="section-subtitle">Основные параметры ответа</div>
-            <div class="grid-4">
-              ${renderAnswerInput(ansId, 'id', ansObj.id, 'id')}
-              ${renderAnswerInput(ansId, 'AnswerID', ansObj.AnswerID, 'AnswerID')}
-              ${renderAnswerInput(ansId, 'AnswerType', ansObj.AnswerType, 'AnswerType')}
-              ${renderAnswerInput(ansId, 'Question', ansObj.Question, 'Question')}
-            </div>
-
-            <div class="section-subtitle">Тексты и ссылки на медиа</div>
-            <div class="grid-2">
-              ${renderAnswerTextarea(ansId, 'MainTxt_Text', ansObj.MainTxt_Text, 'MainTxt_Text')}
-              ${renderAnswerTextarea(ansId, 'TitleText_Text', ansObj.TitleText_Text, 'TitleText_Text')}
-            </div>
-            <div class="grid-2" style="margin-top: 6px;">
-              ${renderAnswerTextarea(ansId, 'HelpUpText_Text', ansObj.HelpUpText_Text, 'HelpUpText_Text')}
-              ${renderAnswerTextarea(ansId, 'HelpDownText_Text', ansObj.HelpDownText_Text, 'HelpDownText_Text')}
-            </div>
-
-            <div class="section-subtitle">Видео и Декор</div>
-            <div class="grid-4">
-              ${renderAnswerInput(ansId, 'VideoLink_VideoLink', ansObj.VideoLink_VideoLink, 'VideoLink_VideoLink')}
-              ${renderAnswerInput(ansId, 'VideoType_VideoType', ansObj.VideoType_VideoType, 'VideoType_VideoType')}
-              ${renderAnswerInput(ansId, 'MainText_Decor_2lines_Image', ansObj.MainText_Decor_2lines_Image, 'MainText_Decor_2lines_Image')}
-              ${renderAnswerInput(ansId, 'MainText_4corner_decor_Image', ansObj.MainText_4corner_decor_Image, 'MainText_4corner_decor_Image')}
-            </div>
-            <div class="grid-4" style="margin-top: 6px;">
-              ${renderAnswerInput(ansId, 'MainText_Decor_IfEmpty_Image', ansObj.MainText_Decor_IfEmpty_Image, 'MainText_Decor_IfEmpty_Image')}
-              ${renderAnswerInput(ansId, 'AdditionalImg_Image', ansObj.AdditionalImg_Image, 'AdditionalImg_Image')}
-              ${renderAnswerInput(ansId, 'TitleBackEmptyImg_Image', ansObj.TitleBackEmptyImg_Image, 'TitleBackEmptyImg_Image')}
-              ${renderAnswerInput(ansId, 'AnswerPicture_Image', ansObj.AnswerPicture_Image, 'AnswerPicture_Image')}
-            </div>
-
-            <div class="section-subtitle">Панели, Префабы, Звук и Анимация</div>
-            <div class="grid-3" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
-              ${renderAnswerInput(ansId, 'LeftPanel_If_Title_Empty_Image', ansObj.LeftPanel_If_Title_Empty_Image, 'LeftPanel_If_Title_Empty_Image')}
-              ${renderAnswerInput(ansId, 'RightPanel_If_Title_Empty_Image', ansObj.RightPanel_If_Title_Empty_Image, 'RightPanel_If_Title_Empty_Image')}
-              ${renderAnswerInput(ansId, 'AdditionalPrefab_Prefab', ansObj.AdditionalPrefab_Prefab, 'AdditionalPrefab_Prefab')}
-            </div>
-            <div class="grid-2" style="margin-top: 6px;">
-              ${renderAnswerInput(ansId, 'Sound_Sound', ansObj.Sound_Sound, 'Sound_Sound')}
-              ${renderAnswerInput(ansId, 'Music_Music', ansObj.Music_Music, 'Music_Music')}
-            </div>
-            <div class="grid-3" style="margin-top: 6px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
-              ${renderAnswerInput(ansId, 'StartAnimation_Animation', ansObj.StartAnimation_Animation, 'StartAnimation_Animation')}
-              ${renderAnswerInput(ansId, 'IdleAnimation_Animation', ansObj.IdleAnimation_Animation, 'IdleAnimation_Animation')}
-              ${renderAnswerInput(ansId, 'DeleteAnimation_Animation', ansObj.DeleteAnimation_Animation, 'DeleteAnimation_Animation')}
-            </div>
-          </div>
-        </details>
-      `;
-    }).join('');
-  }
-
-  function renderAnswerInput(ansId, field, value, label) {
-    return `
-      <div class="form-group">
-        <label class="form-label">${label}</label>
-        <input type="text" class="form-control" value="${escapeHtml(value || '')}" oninput="updateAnswerField('${ansId}', '${field}', this.value)">
-      </div>
-    `;
-  }
-
-  function renderAnswerTextarea(ansId, field, value, label) {
-    return `
-      <div class="form-group">
-        <label class="form-label">${label}</label>
-        <textarea class="form-control" oninput="updateAnswerField('${ansId}', '${field}', this.value)">${escapeHtml(value || '')}</textarea>
-      </div>
-    `;
-  }
-
-  function updateQuestField(field, value) {
-    quests[activeQuestIndex][field] = value;
-    if (field === 'QuestID') renderQuestNav();
-    if (field === 'AnswerList') {
-      const answerIds = value.split(',').map(s => s.trim()).filter(Boolean);
-      const container = document.getElementById('answersContainer');
-      if(container) container.innerHTML = renderAnswersDropdowns(answerIds);
-    }
-  }
-
-  function updateAnswerField(ansId, field, value) {
-    let ansObj = answers.find(a => a.AnswerID === ansId);
-    if (ansObj) {
-      ansObj[field] = value;
-    }
-  }
-
-  function addAnswerToQuest() {
-    const q = quests[activeQuestIndex];
-    const newAnsId = `A_${Date.now().toString().slice(-4)}`;
-    let list = (q.AnswerList || '').split(',').map(s => s.trim()).filter(Boolean);
-    list.push(newAnsId);
-    q.AnswerList = list.join(', ');
-
-    let newAnsObj = { id: newAnsId, AnswerID: newAnsId, AnswerType: "Slide" };
-    ANSWER_FIELDS.forEach(f => { if(!newAnsObj[f]) newAnsObj[f] = ""; });
-    answers.push(newAnsObj);
-
-    renderActiveQuest();
-  }
-
-  function removeAnswerFromQuest(ansId) {
-    const q = quests[activeQuestIndex];
-    let list = (q.AnswerList || '').split(',').map(s => s.trim()).filter(Boolean);
-    list = list.filter(id => id !== ansId);
-    q.AnswerList = list.join(', ');
-    renderActiveQuest();
-  }
-
-  function removeActiveQuest() {
-    if (confirm(`Удалить квест #${activeQuestIndex + 1}?`)) {
-      quests.splice(activeQuestIndex, 1);
-      if (activeQuestIndex >= quests.length) {
-        activeQuestIndex = Math.max(0, quests.length - 1);
-      }
-      renderQuestNav();
-      renderActiveQuest();
-    }
-  }
-
-  document.getElementById('addQuestBtn').onclick = () => {
-    const newId = `Q${quests.length + 1}`;
-    let newQuest = { id: newId, QuestID: newId, BasePrefab: "BasePrefabQuestions", Task: "1" };
-    QUEST_FIELDS.forEach(f => { if(!newQuest[f]) newQuest[f] = ""; });
-    quests.push(newQuest);
-    activeQuestIndex = quests.length - 1;
-    renderQuestNav();
-    renderActiveQuest();
-  };
-
-  function toggleAnswers(openState) {
-    document.querySelectorAll('details.answer-accordion').forEach(el => {
-      el.open = openState;
-    });
-  }
-
-  function escapeHtml(str) {
-    return String(str)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-  }
-
-  document.getElementById('exportBtn').onclick = () => {
-    const fullQuestData = objectsToArray(quests, QUEST_FIELDS);
-    const fullAnswerData = objectsToArray(answers, ANSWER_FIELDS);
-
-    const exportObj = {
-      QuestTable: fullQuestData,
-      Answers: fullAnswerData
-    };
-
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "R4Quest_Config.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
-
-  document.getElementById('jsonInput').addEventListener('change', handleFileSelect);
-
-  function handleFileSelect(evt) {
-    const files = evt.target.files;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = JSON.parse(e.target.result);
-          if (data.QuestTable) quests = arrayToObjects(data.QuestTable);
-          if (data.Answers) answers = arrayToObjects(data.Answers);
-          if (Array.isArray(data) && file.name.toLowerCase().includes('quest')) {
-            quests = arrayToObjects(data);
-          } else if (Array.isArray(data) && file.name.toLowerCase().includes('answer')) {
-            answers = arrayToObjects(data);
-          }
-          activeQuestIndex = 0;
-          renderQuestNav();
-          renderActiveQuest();
-        } catch (err) {
-          alert('Ошибка чтения JSON: ' + err.message);
-        }
-      };
-      reader.readAsText(file);
-    }
-  }
-
-  const dropZone = document.getElementById('dropZone');
-  if(dropZone) {
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('dragover');
-      if (e.dataTransfer.files.length > 0) {
-        document.getElementById('jsonInput').files = e.dataTransfer.files;
-        handleFileSelect({ target: { files: e.dataTransfer.files } });
-      }
-    });
-  }
-
   // Init
-  renderQuestNav();
-  renderActiveQuest();
+  updateSlides();
 </script>
 
 </body>
