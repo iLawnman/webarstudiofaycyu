@@ -1,7 +1,7 @@
 // js/audio.js
 
 const SOUND_MAP = {
-    click: '/assets/click.mp3',
+    click: './assets/click.mp3',
 };
 
 let audioCtx = null;
