@@ -400,8 +400,8 @@ ${innerTreeHtml}    </div>
     group.userData = { type: 'object3d', rawData: data, src: srcPath };
 
     const placeholder = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.05, 0.05),
-      new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
+            new THREE.BoxGeometry(0.05, 0.05, 0.05),
+            new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
     );
     placeholder.name = 'placeholder';
     group.add(placeholder);
@@ -433,8 +433,8 @@ ${innerTreeHtml}    </div>
       group.userData.loadedObj = null;
     }
     const placeholder = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.05, 0.05),
-      new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
+            new THREE.BoxGeometry(0.05, 0.05, 0.05),
+            new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
     );
     placeholder.name = 'placeholder';
     group.add(placeholder);
@@ -692,7 +692,7 @@ ${innerTreeHtml}    </div>
       if (name.startsWith('data-')) {
         name = name.slice(5);
       }
-      const camelCaseKey = name.replace(-([a-z])/g, g => g[1].toUpperCase());
+      const camelCaseKey = name.replace(/-([a-z])/g, g => g[1].toUpperCase());
       data[camelCaseKey] = attr.value;
     }
     return data;
@@ -1024,14 +1024,14 @@ ${innerTreeHtml}    </div>
 
   function addPanel() {
     const panel = createPanelMesh(
-      {
-        name: 'Panel_' + Date.now().toString().slice(-3),
-        width: '0.3',
-        height: '0.3',
-        position: '0,0,0',
-        rotation: '0,0,0'
-      },
-      '<div class="panel"><div class="label">New Panel</div></div>'
+            {
+              name: 'Panel_' + Date.now().toString().slice(-3),
+              width: '0.3',
+              height: '0.3',
+              position: '0,0,0',
+              rotation: '0,0,0'
+            },
+            '<div class="panel"><div class="label">New Panel</div></div>'
     );
     scene.add(panel);
     editableObjects.push(panel);
