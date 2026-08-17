@@ -96,6 +96,14 @@
       opacity: 0.75;
     }
 
+    /* Карточки повышенной высоты (+30%) */
+    .card-tall {
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
     /* Badge & Tags */
     .badge {
       display: inline-block;
@@ -216,7 +224,7 @@
 
 <div id="presentation">
 
-  <!-- SLIDE 1: (Объединенные Слайды 1 + 2) Обзор и Возможности -->
+  <!-- SLIDE 1: Обзор и Возможности -->
   <div class="slide active" data-index="0">
     <div style="max-width:1200px; width:100%; margin-bottom:24px;">
       <div class="badge">WebAR & WebGL Платформа</div>
@@ -231,56 +239,57 @@
       </div>
     </div>
 
+    <!-- Добавлен класс .card-tall к карточкам первого слайда -->
     <div class="grid-3">
-      <div class="card">
+      <div class="card card-tall">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
           <div class="step-num">01</div>
           <h3>Доступность</h3>
         </div>
         <p style="margin-bottom:12px;">Работает прямо в мобильном браузере</p>
         <ul style="list-style:none; padding:0;">
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>Без установок из AppStore/Google Play</li>
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>Быстрый запуск по QR-коду или ссылке</li>
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>Кроссплатформенность iOS и Android</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>Без установок из AppStore/Google Play</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>Быстрый запуск по QR-коду или ссылке</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>Кроссплатформенность iOS и Android</li>
         </ul>
       </div>
 
-      <div class="card">
+      <div class="card card-tall">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
           <div class="step-num">02</div>
           <h3>WebGL Графика</h3>
         </div>
         <p style="margin-bottom:12px;">Качественная визуализация в реальном времени</p>
         <ul style="list-style:none; padding:0;">
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>Интерактивные 3D-модели и персонажи</li>
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>Частицы, реалистичное освещение, VFX</li>
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>Видео-пространства и аудио гиды</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>Интерактивные 3D-модели и персонажи</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>Частицы, реалистичное освещение, VFX</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>Видео-пространства и аудио гиды</li>
         </ul>
       </div>
 
-      <div class="card">
+      <div class="card card-tall">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
           <div class="step-num">03</div>
           <h3>Геймификация</h3>
         </div>
         <p style="margin-bottom:12px;">Гибкие сценарии взаимодействия</p>
         <ul style="list-style:none; padding:0;">
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>AR-маркеры и пространственные точки</li>
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>Диалоги, загадки и ветвления</li>
-          <li style="margin-bottom:4px;"><span class="marker">▸</span>Динамический подгружаемый контент</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>AR-маркеры и пространственные точки</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>Диалоги, загадки и ветвления</li>
+          <li style="margin-bottom:6px;"><span class="marker">▸</span>Динамический подгружаемый контент</li>
         </ul>
       </div>
     </div>
   </div>
 
-  <!-- SLIDE 2: (Объединенные Слайды 3 + 4) Применение и Конструктор -->
+  <!-- SLIDE 2: Применение и Конструктор -->
   <div class="slide" data-index="1">
     <div style="max-width:1200px; width:100%; margin-bottom:12px;">
       <h2>Сферы применения и работа конструктора</h2>
       <p style="font-size:0.85rem;">Локации использования и порядок подготовки сценариев</p>
     </div>
 
-    <!-- Полный список из 6 сфер применения -->
+    <!-- Список из 6 сфер применения -->
     <div class="grid-3-2" style="margin-bottom:20px;">
       <div class="card" style="padding:12px;">
         <div style="font-size:1.2rem; margin-bottom:2px;">🎮</div>
@@ -320,25 +329,25 @@
     </div>
 
     <div class="grid-4">
-      <div class="card" style="padding:12px;">
-        <div class="step-num" style="margin-bottom:6px;">01</div>
+      <div class="card card-tall" style="min-height: 130px;">
+        <div class="step-num" style="margin-bottom:10px;">01</div>
         <h3>Заполнение</h3>
-        <p style="font-size:0.75rem; margin-top:2px;">Задаются задания, подсказки и варианты ответов.</p>
+        <p style="font-size:0.75rem; margin-top:6px;">Задаются задания, подсказки и варианты ответов.</p>
       </div>
-      <div class="card" style="padding:12px;">
-        <div class="step-num" style="margin-bottom:6px;">02</div>
+      <div class="card card-tall" style="min-height: 130px;">
+        <div class="step-num" style="margin-bottom:10px;">02</div>
         <h3>Привязка 3D</h3>
-        <p style="font-size:0.75rem; margin-top:2px;">Указываются пути к 3D-моделям и AR-маркерам.</p>
+        <p style="font-size:0.75rem; margin-top:6px;">Указываются пути к 3D-моделям и AR-маркерам.</p>
       </div>
-      <div class="card" style="padding:12px;">
-        <div class="step-num" style="margin-bottom:6px;">03</div>
+      <div class="card card-tall" style="min-height: 130px;">
+        <div class="step-num" style="margin-bottom:10px;">03</div>
         <h3>Экспорт JSON</h3>
-        <p style="font-size:0.75rem; margin-top:2px;">Формируется готовый файл конфигурации.</p>
+        <p style="font-size:0.75rem; margin-top:6px;">Формируется готовый файл конфигурации.</p>
       </div>
-      <div class="card" style="padding:12px;">
-        <div class="step-num" style="margin-bottom:6px;">04</div>
+      <div class="card card-tall" style="min-height: 130px;">
+        <div class="step-num" style="margin-bottom:10px;">04</div>
         <h3>Загрузка в WebGL</h3>
-        <p style="font-size:0.75rem; margin-top:2px;">Контент подгружается и запускается по ссылке.</p>
+        <p style="font-size:0.75rem; margin-top:6px;">Контент подгружается и запускается по ссылке.</p>
       </div>
     </div>
   </div>
