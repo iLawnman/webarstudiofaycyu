@@ -2,7 +2,7 @@
 import { UI } from './ui.js';
 import { ImageRecognition } from './recognition.js';
 import { ARScene } from './arscene.js';
-import {playSound} from "./audio";
+import {playSound} from "./audio.js";
 
 export class App {
   constructor() {

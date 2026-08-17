@@ -1,4 +1,5 @@
 // js/ui.js
+
 export class UI {
   constructor() {
     this.logPanel = document.getElementById('log-panel');
