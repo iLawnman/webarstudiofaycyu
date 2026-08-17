@@ -2,16 +2,15 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>AR Prefab Editor 3D</title>
+  <title>0.1 Local AR Prefab Editor 3D</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; height: 100vh; background: #1a1a1a; color: #ccc; overflow: hidden; }
 
-    /* Left Sidebar: Control Panel */
     #sidebar { width: 320px; background: #252526; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; z-index: 10; }
     .section { padding: 12px; border-bottom: 1px solid #3c3c3c; }
     .section h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 10px; }
-    
+
     button { background: #0e639c; color: #fff; border: none; padding: 6px 12px; border-radius: 2px; cursor: pointer; font-size: 12px; margin-right: 4px; margin-bottom: 4px; }
     button:hover { background: #1177bb; }
     button.btn-danger { background: #a83232; }
@@ -20,80 +19,68 @@
     input[type="text"], input[type="number"], select { width: 100%; background: #3c3c3c; border: 1px solid #555; color: #fff; padding: 4px 6px; font-size: 12px; margin-bottom: 8px; border-radius: 2px; }
     label { font-size: 11px; color: #aaa; display: block; margin-bottom: 2px; }
 
-    /* Scene Hierarchy List */
     #tree { flex: 1; overflow-y: auto; padding: 6px; background: #1e1e1e; }
     .tree-item { padding: 6px 8px; font-size: 12px; cursor: pointer; border-radius: 3px; margin-bottom: 2px; display: flex; justify-content: space-between; }
     .tree-item:hover { background: #2a2d2e; }
     .tree-item.active { background: #094771; color: #fff; }
 
-    /* Main Viewport */
     #viewport { flex: 1; position: relative; }
     #canvas3d { width: 100%; height: 100%; display: block; }
 
-    /* Right Sidebar: Inspector */
     #inspector { width: 300px; background: #252526; border-left: 1px solid #3c3c3c; padding: 12px; overflow-y: auto; z-index: 10; }
     .prop-group { margin-bottom: 12px; }
     .row { display: flex; gap: 6px; }
     .row > div { flex: 1; }
 
-    /* Hidden Canvas for Panel UI rendering */
     #render-canvas { display: none; }
   </style>
 
-  <!-- Three.js Library & Controls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 </head>
 <body>
 
-  <!-- Left Sidebar -->
-  <div id="sidebar">
-    <div class="section">
-      <h3>Локальные префабы</h3>
-      <button onclick="loadLocalPrefab()">Загрузить дефолтный шаблон</button>
-      <button onclick="document.getElementById('file-input').click()">Открыть файл с диска...</button>
-      <button onclick="exportHTML()">Сохранить HTML</button>
-      <input type="file" id="file-input" style="display:none" accept=".html,.template" onchange="handleFileSelect(event)">
-    </div>
-
-    <div class="section">
-      <h3>Добавить 3D Элемент</h3>
-      <button onclick="addSphere()">+ Сфера</button>
-      <button onclick="addPanel()">+ UI Панель</button>
-    </div>
-
-    <div class="section" style="flex: 1; display: flex; flex-direction: column; border-bottom: none;">
-      <h3>Иерархия сцены</h3>
-      <div id="tree"></div>
-    </div>
+<div id="sidebar">
+  <div class="section">
+    <h3>Локальные префабы</h3>
+    <button onclick="loadLocalPrefab()">Загрузить дефолтный шаблон</button>
+    <button onclick="document.getElementById('file-input').click()">Открыть файл с диска...</button>
+    <button onclick="exportHTML()">Сохранить HTML</button>
+    <input type="file" id="file-input" style="display:none" accept=".html,.template" onchange="handleFileSelect(event)">
   </div>
 
-  <!-- Central Viewport -->
-  <div id="viewport">
-    <canvas id="canvas3d"></canvas>
+  <div class="section">
+    <h3>Добавить 3D Элемент</h3>
+    <button onclick="addSphere()">+ Сфера</button>
+    <button onclick="addPanel()">+ UI Панель</button>
   </div>
 
-  <!-- Right Inspector -->
-  <div id="inspector">
-    <h3>Свойства объекта</h3>
-    <div id="inspector-content">
-      <p style="font-size: 12px; color: #666; margin-top: 10px;">Выберите элемент в сцене для редактирования.</p>
-    </div>
+  <div class="section" style="flex: 1; display: flex; flex-direction: column; border-bottom: none;">
+    <h3>Иерархия сцены</h3>
+    <div id="tree"></div>
   </div>
+</div>
 
-  <!-- Offscreen canvas for rendering HTML panel textures -->
-  <canvas id="render-canvas" width="256" height="384"></canvas>
+<div id="viewport">
+  <canvas id="canvas3d"></canvas>
+</div>
 
-  <script>
-    // --- Application State ---
-    let scene, camera, renderer, orbitControls, transformControls;
-    let selectedObject = null;
-    const editableObjects = [];
-    
-    // Встроенный локальный префаб по умолчанию (без запросов к сети)
-    const localDefaultTemplate = `
-<template id="ar-target">
+<div id="inspector">
+  <h3>Свойства объекта</h3>
+  <div id="inspector-content">
+    <p style="font-size: 12px; color: #666; margin-top: 10px;">Выберите элемент в сцене для редактирования.</p>
+  </div>
+</div>
+
+<canvas id="render-canvas" width="256" height="384"></canvas>
+
+<script>
+  let scene, camera, renderer, orbitControls, transformControls;
+  let selectedObject = null;
+  const editableObjects = [];
+
+  const localDefaultTemplate = `<template id="ar-target">
   <sphere name="Sphere_Main" data-radius="0.05" data-segments="24" data-color="#ff00ff" data-emissive="#ff00ff" data-emissive-intensity="0.15" data-metalness="0.3" data-roughness="0.4" data-position="0,0.05,0"></sphere>
   <panel name="UI_TextPanel" data-width="0.2" data-height="0.2" data-position="-0.15,0.1,0" data-rotation="0,0,0">
     <div class="panel text-panel">
@@ -105,300 +92,287 @@
   </panel>
 </template>`;
 
-    // --- Core 3D Initialization ---
-    function init3D() {
-      const container = document.getElementById('viewport');
-      
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x1e1e1e);
+  function init3D() {
+    const container = document.getElementById('viewport');
 
-      camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.01, 100);
-      camera.position.set(0, 0.3, 0.5);
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1e1e1e);
 
-      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), antialias: true });
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
+    camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.01, 100);
+    camera.position.set(0, 0.3, 0.5);
 
-      // Lights
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-      scene.add(ambientLight);
+    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
 
-      const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-      dirLight.position.set(5, 10, 7);
-      scene.add(dirLight);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
 
-      // Grid Helper
-      const grid = new THREE.GridHelper(1, 20, 0x444444, 0x222222);
-      scene.add(grid);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
 
-      // Controls
-      orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
-      
-      transformControls = new THREE.TransformControls(camera, renderer.domElement);
-      transformControls.size = 0.75;
-      transformControls.addEventListener('dragging-changed', (event) => {
-        orbitControls.enabled = !event.value;
-      });
-      transformControls.addEventListener('change', updateInspectorFromTransform);
-      scene.add(transformControls);
+    const grid = new THREE.GridHelper(1, 20, 0x444444, 0x222222);
+    scene.add(grid);
 
-      // Raycasting for object selection
-      const raycaster = new THREE.Raycaster();
-      const mouse = new THREE.Vector2();
+    orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
 
-      renderer.domElement.addEventListener('pointerdown', (e) => {
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    transformControls = new THREE.TransformControls(camera, renderer.domElement);
+    transformControls.size = 0.75;
+    transformControls.addEventListener('dragging-changed', (event) => {
+      orbitControls.enabled = !event.value;
+    });
+    transformControls.addEventListener('change', updateInspectorFromTransform);
+    scene.add(transformControls);
 
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(editableObjects, false);
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
 
-        if (intersects.length > 0) {
-          selectObject(intersects[0].object);
-        }
-      });
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-      window.addEventListener('resize', onWindowResize);
-      animate();
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(editableObjects, false);
 
-      // Загружаем стартовый префаб сразу из локальной памяти
-      loadLocalPrefab();
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      orbitControls.update();
-      renderer.render(scene, camera);
-    }
-
-    function onWindowResize() {
-      const container = document.getElementById('viewport');
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
-    }
-
-    // --- Canvas Texture Generation for UI Panels ---
-    function renderPanelToCanvas(panelData) {
-      const canvas = document.getElementById('render-canvas');
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width;
-      const h = canvas.height;
-
-      ctx.clearRect(0, 0, w, h);
-
-      // Background
-      ctx.fillStyle = panelData.bgColor || '#0a0a1e';
-      ctx.fillRect(0, 0, w, h);
-
-      // Border
-      if (panelData.borderColor) {
-        ctx.strokeStyle = panelData.borderColor;
-        ctx.lineWidth = 8;
-        ctx.strokeRect(4, 4, w - 8, h - 8);
+      if (intersects.length > 0) {
+        selectObject(intersects[0].object);
       }
+    });
 
-      // UI Elements rendering
-      if (panelData.elements) {
-        panelData.elements.forEach(el => {
+    window.addEventListener('resize', onWindowResize);
+    animate();
+    loadLocalPrefab();
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    orbitControls.update();
+    renderer.render(scene, camera);
+  }
+
+  function onWindowResize() {
+    const container = document.getElementById('viewport');
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  }
+
+  function renderPanelToCanvas(panelData) {
+    const canvas = document.getElementById('render-canvas');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = panelData.bgColor || '#0a0a1e';
+    ctx.fillRect(0, 0, w, h);
+
+    if (panelData.borderColor) {
+      ctx.strokeStyle = panelData.borderColor;
+      ctx.lineWidth = 8;
+      ctx.strokeRect(4, 4, w - 8, h - 8);
+    }
+
+    if (panelData.elements) {
+      panelData.elements.forEach(el => {
+        ctx.fillStyle = el.color || '#ffffff';
+        ctx.font = `${el.fontWeight || 'normal'} ${el.fontSize || 20}px sans-serif`;
+        ctx.textAlign = 'center';
+
+        if (el.type === 'text' || el.type === 'label') {
+          ctx.fillText(el.text || '', w / 2, el.y || 50);
+        } else if (el.type === 'button') {
+          ctx.fillStyle = el.btnBg || '#00cc66';
+          ctx.fillRect(20, el.y - 30, w - 40, 50);
           ctx.fillStyle = el.color || '#ffffff';
-          ctx.font = `${el.fontWeight || 'normal'} ${el.fontSize || 20}px sans-serif`;
-          ctx.textAlign = 'center';
-
-          if (el.type === 'text' || el.type === 'label') {
-            ctx.fillText(el.text || '', w / 2, el.y || 50);
-          } else if (el.type === 'button') {
-            ctx.fillStyle = el.btnBg || '#00cc66';
-            ctx.fillRect(20, el.y - 30, w - 40, 50);
-            ctx.fillStyle = el.color || '#ffffff';
-            ctx.fillText(el.text || 'Button', w / 2, el.y + 5);
-          } else if (el.type === 'input') {
-            ctx.strokeStyle = '#666';
-            ctx.strokeRect(20, el.y - 20, w - 40, 40);
-            ctx.fillStyle = '#aaa';
-            ctx.fillText(el.text || 'Input...', w / 2, el.y + 5);
-          }
-        });
-      }
-
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.needsUpdate = true;
-      return texture;
-    }
-
-    // --- Object Creation Factories ---
-    function createSphereMesh(data = {}) {
-      const radius = parseFloat(data.radius) || 0.05;
-      const geo = new THREE.SphereGeometry(radius, parseInt(data.segments) || 24, parseInt(data.segments) || 24);
-      const mat = new THREE.MeshStandardMaterial({
-        color: data.color || '#ff00ff',
-        emissive: data.emissive || '#ff00ff',
-        emissiveIntensity: parseFloat(data.emissiveIntensity) || 0.15,
-        metalness: parseFloat(data.metalness) || 0.3,
-        roughness: parseFloat(data.roughness) || 0.4
-      });
-
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = data.name || 'sphere_' + Date.now().toString().slice(-4);
-      mesh.userData = { type: 'sphere', rawData: data };
-      
-      applyTransformData(mesh, data);
-      return mesh;
-    }
-
-    function createPanelMesh(data = {}, innerHTML = '') {
-      const width = parseFloat(data.width) || 0.2;
-      const height = parseFloat(data.height) || 0.2;
-      const geo = new THREE.PlaneGeometry(width, height);
-
-      const panelData = parsePanelHTML(innerHTML);
-      const texture = renderPanelToCanvas(panelData);
-      
-      const mat = new THREE.MeshStandardMaterial({
-        map: texture,
-        side: THREE.DoubleSide,
-        transparent: true
-      });
-
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = data.name || 'panel_' + Date.now().toString().slice(-4);
-      mesh.userData = { type: 'panel', rawData: data, panelData: panelData, innerHTML: innerHTML };
-
-      applyTransformData(mesh, data);
-      return mesh;
-    }
-
-    function parsePanelHTML(html) {
-      const panelData = { bgColor: '#0a0a30', borderColor: '#00ffaa', elements: [] };
-      if (!html) return panelData;
-
-      if (html.includes('img-panel')) {
-        panelData.bgColor = '#1a0033';
-        panelData.borderColor = '#ff66cc';
-      } else if (html.includes('ok-panel')) {
-        panelData.bgColor = '#002814';
-        panelData.borderColor = null;
-      }
-
-      const labelMatch = html.match(/class="label">([^<]+)</);
-      if (labelMatch) panelData.elements.push({ type: 'text', text: labelMatch[1], y: 40, fontSize: 24, color: panelData.borderColor });
-
-      const nameMatch = html.match(/class="name">([^<]+)</);
-      if (nameMatch) panelData.elements.push({ type: 'text', text: nameMatch[1], y: 160, fontSize: 32, fontWeight: 'bold' });
-
-      const subMatch = html.match(/class="sub">([^<]+)</);
-      if (subMatch) panelData.elements.push({ type: 'text', text: subMatch[1], y: 250, fontSize: 20, color: '#aaa' });
-
-      const btnMatch = html.match(/class="btn">([^<]+)</);
-      if (btnMatch) panelData.elements.push({ type: 'button', text: btnMatch[1], y: 48, fontSize: 32, btnBg: '#00cc66' });
-
-      return panelData;
-    }
-
-    function applyTransformData(mesh, data) {
-      if (data.position) {
-        const pos = data.position.split(',').map(Number);
-        if (pos.length === 3) mesh.position.set(pos[0], pos[1], pos[2]);
-      }
-      if (data.rotation) {
-        const rot = data.rotation.split(',').map(THREE.MathUtils.degToRad);
-        if (rot.length === 3) mesh.rotation.set(rot[0], rot[1], rot[2]);
-      }
-    }
-
-    // --- Prefab Loader (Pure Local) ---
-    function loadLocalPrefab() {
-      parseAndBuildPrefab(localDefaultTemplate);
-    }
-
-    function parseAndBuildPrefab(htmlContent) {
-      // Clear current scene
-      editableObjects.forEach(obj => scene.remove(obj));
-      editableObjects.length = 0;
-      deselectObject();
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlContent, 'text/html');
-      const template = doc.querySelector('template#ar-target') || doc.body;
-
-      Array.from(template.children).forEach(node => {
-        const tag = node.tagName.toLowerCase();
-        let mesh = null;
-
-        if (tag === 'sphere') {
-          mesh = createSphereMesh(getDataset(node));
-        } else if (tag === 'panel') {
-          mesh = createPanelMesh(getDataset(node), node.innerHTML);
-        }
-
-        if (mesh) {
-          scene.add(mesh);
-          editableObjects.push(mesh);
+          ctx.fillText(el.text || 'Button', w / 2, el.y + 5);
+        } else if (el.type === 'input') {
+          ctx.strokeStyle = '#666';
+          ctx.strokeRect(20, el.y - 20, w - 40, 40);
+          ctx.fillStyle = '#aaa';
+          ctx.fillText(el.text || 'Input...', w / 2, el.y + 5);
         }
       });
-
-      updateHierarchyTree();
     }
 
-    function getDataset(node) {
-      const data = {};
-      for (let attr of node.attributes) {
-        if (attr.name.startsWith('data-')) {
-          const key = attr.name.replace('data-', '').replace(/-([a-z])/g, g => g[1].toUpperCase());
-          data[key] = attr.value;
-        } else if (attr.name === 'name') {
-          data.name = attr.value;
-        }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  function createSphereMesh(data = {}) {
+    const radius = parseFloat(data.radius) || 0.05;
+    const geo = new THREE.SphereGeometry(radius, parseInt(data.segments) || 24, parseInt(data.segments) || 24);
+    const mat = new THREE.MeshStandardMaterial({
+      color: data.color || '#ff00ff',
+      emissive: data.emissive || '#ff00ff',
+      emissiveIntensity: parseFloat(data.emissiveIntensity) || 0.15,
+      metalness: parseFloat(data.metalness) || 0.3,
+      roughness: parseFloat(data.roughness) || 0.4
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = data.name || 'sphere_' + Date.now().toString().slice(-4);
+    mesh.userData = { type: 'sphere', rawData: data };
+
+    applyTransformData(mesh, data);
+    return mesh;
+  }
+
+  function createPanelMesh(data = {}, innerHTML = '') {
+    const width = parseFloat(data.width) || 0.2;
+    const height = parseFloat(data.height) || 0.2;
+    const geo = new THREE.PlaneGeometry(width, height);
+
+    const panelData = parsePanelHTML(innerHTML);
+    const texture = renderPanelToCanvas(panelData);
+
+    const mat = new THREE.MeshStandardMaterial({
+      map: texture,
+      side: THREE.DoubleSide,
+      transparent: true
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = data.name || 'panel_' + Date.now().toString().slice(-4);
+    mesh.userData = { type: 'panel', rawData: data, panelData: panelData, innerHTML: innerHTML };
+
+    applyTransformData(mesh, data);
+    return mesh;
+  }
+
+  function parsePanelHTML(html) {
+    const panelData = { bgColor: '#0a0a30', borderColor: '#00ffaa', elements: [] };
+    if (!html) return panelData;
+
+    if (html.includes('img-panel')) {
+      panelData.bgColor = '#1a0033';
+      panelData.borderColor = '#ff66cc';
+    } else if (html.includes('ok-panel')) {
+      panelData.bgColor = '#002814';
+      panelData.borderColor = null;
+    }
+
+    const labelMatch = html.match(/class="label">([^<]+)</);
+    if (labelMatch) panelData.elements.push({ type: 'text', text: labelMatch[1], y: 40, fontSize: 24, color: panelData.borderColor });
+
+    const nameMatch = html.match(/class="name">([^<]+)</);
+    if (nameMatch) panelData.elements.push({ type: 'text', text: nameMatch[1], y: 160, fontSize: 32, fontWeight: 'bold' });
+
+    const subMatch = html.match(/class="sub">([^<]+)</);
+    if (subMatch) panelData.elements.push({ type: 'text', text: subMatch[1], y: 250, fontSize: 20, color: '#aaa' });
+
+    const btnMatch = html.match(/class="btn">([^<]+)</);
+    if (btnMatch) panelData.elements.push({ type: 'button', text: btnMatch[1], y: 48, fontSize: 32, btnBg: '#00cc66' });
+
+    return panelData;
+  }
+
+  function applyTransformData(mesh, data) {
+    if (data.position) {
+      const pos = data.position.split(',').map(Number);
+      if (pos.length === 3) mesh.position.set(pos[0], pos[1], pos[2]);
+    }
+    if (data.rotation) {
+      const rot = data.rotation.split(',').map(THREE.MathUtils.degToRad);
+      if (rot.length === 3) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    }
+  }
+
+  function loadLocalPrefab() {
+    parseAndBuildPrefab(localDefaultTemplate);
+  }
+
+  function parseAndBuildPrefab(htmlContent) {
+    editableObjects.forEach(obj => scene.remove(obj));
+    editableObjects.length = 0;
+    deselectObject();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    const template = doc.querySelector('template#ar-target') || doc.body;
+
+    Array.from(template.children).forEach(node => {
+      const tag = node.tagName.toLowerCase();
+      let mesh = null;
+
+      if (tag === 'sphere') {
+        mesh = createSphereMesh(getDataset(node));
+      } else if (tag === 'panel') {
+        mesh = createPanelMesh(getDataset(node), node.innerHTML);
       }
-      return data;
+
+      if (mesh) {
+        scene.add(mesh);
+        editableObjects.push(mesh);
+      }
+    });
+
+    updateHierarchyTree();
+  }
+
+  function getDataset(node) {
+    const data = {};
+    for (let attr of node.attributes) {
+      if (attr.name.startsWith('data-')) {
+        const key = attr.name.replace('data-', '').replace(/-([a-z])/g, g => g[1].toUpperCase());
+        data[key] = attr.value;
+      } else if (attr.name === 'name') {
+        data.name = attr.value;
+      }
     }
+    return data;
+  }
 
-    function handleFileSelect(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => parseAndBuildPrefab(e.target.result);
-      reader.readAsText(file);
-    }
+  function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => parseAndBuildPrefab(e.target.result);
+    reader.readAsText(file);
+  }
 
-    // --- Selection and Hierarchy ---
-    function selectObject(obj) {
-      selectedObject = obj;
-      transformControls.attach(obj);
-      updateHierarchyTree();
-      renderInspector();
-    }
+  function selectObject(obj) {
+    selectedObject = obj;
+    transformControls.attach(obj);
+    updateHierarchyTree();
+    renderInspector();
+  }
 
-    function deselectObject() {
-      selectedObject = null;
-      transformControls.detach();
-      updateHierarchyTree();
-      document.getElementById('inspector-content').innerHTML = `<p style="font-size: 12px; color: #666; margin-top: 10px;">Выберите элемент в сцене для редактирования.</p>`;
-    }
+  function deselectObject() {
+    selectedObject = null;
+    transformControls.detach();
+    updateHierarchyTree();
+    document.getElementById('inspector-content').innerHTML = `<p style="font-size: 12px; color: #666; margin-top: 10px;">Выберите элемент в сцене для редактирования.</p>`;
+  }
 
-    function updateHierarchyTree() {
-      const treeContainer = document.getElementById('tree');
-      treeContainer.innerHTML = '';
+  function updateHierarchyTree() {
+    const treeContainer = document.getElementById('tree');
+    treeContainer.innerHTML = '';
 
-      editableObjects.forEach(obj => {
-        const div = document.createElement('div');
-        div.className = 'tree-item' + (selectedObject === obj ? ' active' : '');
-        div.innerHTML = `<span>${obj.name}</span><span style="color:#666">${obj.userData.type}</span>`;
-        div.onclick = () => selectObject(obj);
-        treeContainer.appendChild(div);
-      });
-    }
+    editableObjects.forEach(obj => {
+      const div = document.createElement('div');
+      div.className = 'tree-item' + (selectedObject === obj ? ' active' : '');
+      div.innerHTML = `<span>${obj.name}</span><span style="color:#666">${obj.userData.type}</span>`;
+      div.onclick = () => selectObject(obj);
+      treeContainer.appendChild(div);
+    });
+  }
 
-    // --- Inspector Panel Rendering ---
-    function renderInspector() {
-      if (!selectedObject) return;
-      const container = document.getElementById('inspector-content');
-      const obj = selectedObject;
-      const pos = obj.position;
-      const rot = obj.rotation.clone().multiplyScalar(THREE.MathUtils.RAD2DEG);
+  function renderInspector() {
+    if (!selectedObject) return;
+    const container = document.getElementById('inspector-content');
+    const obj = selectedObject;
+    const pos = obj.position;
 
-      let html = `
+    // Исправленный перевод углов поворота из радианов в градусы
+    const rotDegX = THREE.MathUtils.radToDeg(obj.rotation.x);
+    const rotDegY = THREE.MathUtils.radToDeg(obj.rotation.y);
+    const rotDegZ = THREE.MathUtils.radToDeg(obj.rotation.z);
+
+    let html = `
         <div class="prop-group">
           <label>Имя элемента</label>
           <input type="text" value="${obj.name}" onchange="updateObjName(this.value)">
@@ -414,15 +388,15 @@
         <div class="prop-group">
           <label>Поворот (Deg X, Y, Z)</label>
           <div class="row">
-            <div><input type="number" step="1" value="${rot.x.toFixed(1)}" onchange="updateObjTransform('rot', 'x', this.value)"></div>
-            <div><input type="number" step="1" value="${rot.y.toFixed(1)}" onchange="updateObjTransform('rot', 'y', this.value)"></div>
-            <div><input type="number" step="1" value="${rot.z.toFixed(1)}" onchange="updateObjTransform('rot', 'z', this.value)"></div>
+            <div><input type="number" step="1" value="${rotDegX.toFixed(1)}" onchange="updateObjTransform('rot', 'x', this.value)"></div>
+            <div><input type="number" step="1" value="${rotDegY.toFixed(1)}" onchange="updateObjTransform('rot', 'y', this.value)"></div>
+            <div><input type="number" step="1" value="${rotDegZ.toFixed(1)}" onchange="updateObjTransform('rot', 'z', this.value)"></div>
           </div>
         </div>
       `;
 
-      if (obj.userData.type === 'panel') {
-        html += `
+    if (obj.userData.type === 'panel') {
+      html += `
           <hr style="border-color:#3c3c3c; margin: 12px 0;">
           <div class="prop-group">
             <h3>UI Компоненты Панели</h3>
@@ -432,45 +406,44 @@
           </div>
           <div id="ui-elements-list"></div>
         `;
-      }
-
-      html += `<button class="btn-danger" onclick="deleteSelectedObject()" style="margin-top:20px; width:100%;">Удалить объект</button>`;
-      container.innerHTML = html;
-
-      if (obj.userData.type === 'panel') {
-        renderUIElementsList();
-      }
     }
 
-    function updateObjName(val) {
-      if (selectedObject) {
-        selectedObject.name = val;
-        updateHierarchyTree();
-      }
+    html += `<button class="btn-danger" onclick="deleteSelectedObject()" style="margin-top:20px; width:100%;">Удалить объект</button>`;
+    container.innerHTML = html;
+
+    if (obj.userData.type === 'panel') {
+      renderUIElementsList();
     }
+  }
 
-    function updateObjTransform(type, axis, value) {
-      if (!selectedObject) return;
-      const val = parseFloat(value) || 0;
-      if (type === 'pos') selectedObject.position[axis] = val;
-      if (type === 'rot') selectedObject.rotation[axis] = THREE.MathUtils.degToRad(val);
+  function updateObjName(val) {
+    if (selectedObject) {
+      selectedObject.name = val;
+      updateHierarchyTree();
     }
+  }
 
-    function updateInspectorFromTransform() {
-      if (!selectedObject) return;
-      renderInspector();
-    }
+  function updateObjTransform(type, axis, value) {
+    if (!selectedObject) return;
+    const val = parseFloat(value) || 0;
+    if (type === 'pos') selectedObject.position[axis] = val;
+    if (type === 'rot') selectedObject.rotation[axis] = THREE.MathUtils.degToRad(val);
+  }
 
-    // --- Dynamic UI Canvas Editing ---
-    function renderUIElementsList() {
-      const container = document.getElementById('ui-elements-list');
-      if (!container || !selectedObject || !selectedObject.userData.panelData) return;
+  function updateInspectorFromTransform() {
+    if (!selectedObject) return;
+    renderInspector();
+  }
 
-      const elements = selectedObject.userData.panelData.elements || [];
-      let html = '';
+  function renderUIElementsList() {
+    const container = document.getElementById('ui-elements-list');
+    if (!container || !selectedObject || !selectedObject.userData.panelData) return;
 
-      elements.forEach((el, index) => {
-        html += `
+    const elements = selectedObject.userData.panelData.elements || [];
+    let html = '';
+
+    elements.forEach((el, index) => {
+      html += `
           <div style="background:#1e1e1e; padding:8px; margin-bottom:6px; border-radius:3px;">
             <label>Тип: ${el.type}</label>
             <input type="text" value="${el.text || ''}" onchange="updateUIElement(${index}, 'text', this.value)">
@@ -481,129 +454,128 @@
             <button class="btn-danger" style="font-size:10px; padding:2px 6px;" onclick="removeUIElement(${index})">Удалить</button>
           </div>
         `;
-      });
-      container.innerHTML = html;
-    }
+    });
+    container.innerHTML = html;
+  }
 
-    function addUIElement(type) {
-      if (!selectedObject || !selectedObject.userData.panelData) return;
-      const elements = selectedObject.userData.panelData.elements;
-      
-      if (type === 'text') elements.push({ type: 'text', text: 'Новый текст', y: 100, fontSize: 24, color: '#ffffff' });
-      if (type === 'button') elements.push({ type: 'button', text: 'Кнопка', y: 200, fontSize: 28, btnBg: '#00cc66' });
-      if (type === 'input') elements.push({ type: 'input', text: 'Введите текст...', y: 280, fontSize: 20 });
+  function addUIElement(type) {
+    if (!selectedObject || !selectedObject.userData.panelData) return;
+    const elements = selectedObject.userData.panelData.elements;
 
+    if (type === 'text') elements.push({ type: 'text', text: 'Новый текст', y: 100, fontSize: 24, color: '#ffffff' });
+    if (type === 'button') elements.push({ type: 'button', text: 'Кнопка', y: 200, fontSize: 28, btnBg: '#00cc66' });
+    if (type === 'input') elements.push({ type: 'input', text: 'Введите текст...', y: 280, fontSize: 20 });
+
+    refreshPanelTexture(selectedObject);
+    renderUIElementsList();
+  }
+
+  function updateUIElement(index, key, value) {
+    if (!selectedObject || !selectedObject.userData.panelData) return;
+    const el = selectedObject.userData.panelData.elements[index];
+    if (el) {
+      el[key] = (key === 'y' || key === 'fontSize') ? parseInt(value) : value;
       refreshPanelTexture(selectedObject);
-      renderUIElementsList();
     }
+  }
 
-    function updateUIElement(index, key, value) {
-      if (!selectedObject || !selectedObject.userData.panelData) return;
-      const el = selectedObject.userData.panelData.elements[index];
-      if (el) {
-        el[key] = (key === 'y' || key === 'fontSize') ? parseInt(value) : value;
-        refreshPanelTexture(selectedObject);
+  function removeUIElement(index) {
+    if (!selectedObject || !selectedObject.userData.panelData) return;
+    selectedObject.userData.panelData.elements.splice(index, 1);
+    refreshPanelTexture(selectedObject);
+    renderUIElementsList();
+  }
+
+  function refreshPanelTexture(obj) {
+    const texture = renderPanelToCanvas(obj.userData.panelData);
+    obj.material.map = texture;
+    obj.material.needsUpdate = true;
+  }
+
+  function addSphere() {
+    const sphere = createSphereMesh({
+      name: 'Sphere_' + Date.now().toString().slice(-3),
+      radius: '0.05',
+      color: '#ff00ff',
+      emissive: '#ff00ff',
+      emissiveIntensity: '0.15'
+    });
+    scene.add(sphere);
+    editableObjects.push(sphere);
+    selectObject(sphere);
+  }
+
+  function addPanel() {
+    const panel = createPanelMesh(
+            {
+              name: 'Panel_' + Date.now().toString().slice(-3),
+              width: '0.2',
+              height: '0.2',
+              position: '0,0,0',
+              rotation: '0,0,0'
+            },
+            '<div class="panel"><div class="label">New Panel</div></div>'
+    );
+    scene.add(panel);
+    editableObjects.push(panel);
+    selectObject(panel);
+  }
+
+  function deleteSelectedObject() {
+    if (!selectedObject) return;
+    const index = editableObjects.indexOf(selectedObject);
+    if (index > -1) editableObjects.splice(index, 1);
+
+    scene.remove(selectedObject);
+    deselectObject();
+    updateHierarchyTree();
+  }
+
+  function exportHTML() {
+    let output = `<template id="ar-target">\n`;
+
+    editableObjects.forEach(obj => {
+      const pos = `${obj.position.x.toFixed(3)},${obj.position.y.toFixed(3)},${obj.position.z.toFixed(3)}`;
+      const rotDegX = THREE.MathUtils.radToDeg(obj.rotation.x);
+      const rotDegY = THREE.MathUtils.radToDeg(obj.rotation.y);
+      const rotDegZ = THREE.MathUtils.radToDeg(obj.rotation.z);
+      const rot = `${rotDegX.toFixed(0)},${rotDegY.toFixed(0)},${rotDegZ.toFixed(0)}`;
+
+      if (obj.userData.type === 'sphere') {
+        output += `  <sphere\n`;
+        output += `    name="${obj.name}"\n`;
+        output += `    data-radius="0.05"\n`;
+        output += `    data-position="${pos}"\n`;
+        output += `    data-rotation="${rot}"\n`;
+        output += `  ></sphere>\n`;
+      } else if (obj.userData.type === 'panel') {
+        output += `  <panel\n`;
+        output += `    name="${obj.name}"\n`;
+        output += `    data-width="0.2"\n`;
+        output += `    data-height="0.2"\n`;
+        output += `    data-position="${pos}"\n`;
+        output += `    data-rotation="${rot}"\n`;
+        output += `  >\n`;
+
+        output += `    <div class="panel">\n`;
+        (obj.userData.panelData.elements || []).forEach(el => {
+          output += `      <div class="${el.type}">${el.text || ''}</div>\n`;
+        });
+        output += `    </div>\n`;
+        output += `  </panel>\n`;
       }
-    }
+    });
 
-    function removeUIElement(index) {
-      if (!selectedObject || !selectedObject.userData.panelData) return;
-      selectedObject.userData.panelData.elements.splice(index, 1);
-      refreshPanelTexture(selectedObject);
-      renderUIElementsList();
-    }
+    output += `</template>`;
 
-    function refreshPanelTexture(obj) {
-      const texture = renderPanelToCanvas(obj.userData.panelData);
-      obj.material.map = texture;
-      obj.material.needsUpdate = true;
-    }
+    const blob = new Blob([output], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'artarget.html';
+    a.click();
+  }
 
-    // --- Add/Delete Scene Objects ---
-    function addSphere() {
-      const sphere = createSphereMesh({ 
-        name: 'Sphere_' + Date.now().toString().slice(-3),
-        radius: '0.05',
-        color: '#ff00ff',
-        emissive: '#ff00ff',
-        emissiveIntensity: '0.15'
-      });
-      scene.add(sphere);
-      editableObjects.push(sphere);
-      selectObject(sphere);
-    }
-
-    function addPanel() {
-      const panel = createPanelMesh(
-        { 
-          name: 'Panel_' + Date.now().toString().slice(-3),
-          width: '0.2',
-          height: '0.2',
-          position: '0,0,0',
-          rotation: '0,0,0'
-        }, 
-        '<div class="panel"><div class="label">New Panel</div></div>'
-      );
-      scene.add(panel);
-      editableObjects.push(panel);
-      selectObject(panel);
-    }
-
-    function deleteSelectedObject() {
-      if (!selectedObject) return;
-      const index = editableObjects.indexOf(selectedObject);
-      if (index > -1) editableObjects.splice(index, 1);
-      
-      scene.remove(selectedObject);
-      deselectObject();
-      updateHierarchyTree();
-    }
-
-    // --- Export HTML ---
-    function exportHTML() {
-      let output = `<template id="ar-target">\n`;
-
-      editableObjects.forEach(obj => {
-        const pos = `${obj.position.x.toFixed(3)},${obj.position.y.toFixed(3)},${obj.position.z.toFixed(3)}`;
-        const rotDeg = obj.rotation.clone().multiplyScalar(THREE.MathUtils.RAD2DEG);
-        const rot = `${rotDeg.x.toFixed(0)},${rotDeg.y.toFixed(0)},${rotDeg.z.toFixed(0)}`;
-
-        if (obj.userData.type === 'sphere') {
-          output += `  <sphere\n`;
-          output += `    name="${obj.name}"\n`;
-          output += `    data-radius="0.05"\n`;
-          output += `    data-position="${pos}"\n`;
-          output += `    data-rotation="${rot}"\n`;
-          output += `  ></sphere>\n`;
-        } else if (obj.userData.type === 'panel') {
-          output += `  <panel\n`;
-          output += `    name="${obj.name}"\n`;
-          output += `    data-width="0.2"\n`;
-          output += `    data-height="0.2"\n`;
-          output += `    data-position="${pos}"\n`;
-          output += `    data-rotation="${rot}"\n`;
-          output += `  >\n`;
-          
-          output += `    <div class="panel">\n`;
-          (obj.userData.panelData.elements || []).forEach(el => {
-            output += `      <div class="${el.type}">${el.text || ''}</div>\n`;
-          });
-          output += `    </div>\n`;
-          output += `  </panel>\n`;
-        }
-      });
-
-      output += `</template>`;
-
-      const blob = new Blob([output], { type: 'text/html' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'artarget.html';
-      a.click();
-    }
-
-    // Launch App
-    window.onload = init3D;
-  </script>
+  window.onload = init3D;
+</script>
 </body>
 </html>
