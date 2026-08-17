@@ -2,6 +2,7 @@
 import { UI } from './ui.js';
 import { ImageRecognition } from './recognition.js';
 import { ARScene } from './arscene.js';
+import {playSound} from "./audio";
 
 export class App {
   constructor() {
@@ -80,6 +81,7 @@ export class App {
         this.ui.enableArButton();
         return;
       }
+      playSound("click");
     }
 
     await this.arScene.renderer.xr.setSession(this.xrSession);

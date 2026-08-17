@@ -1,6 +1,7 @@
 // js/recognition.js
 import * as THREE from 'three';
 import { createArTargetSync } from './artarget.js';
+import { playSound } from './audio.js';
 
 export class ImageRecognition {
   constructor(ui) {
@@ -358,6 +359,7 @@ export class ImageRecognition {
           this.ui.log('[' + idx + '] AR Target created: ' + markerName + ' (state=' + trackingState + ')', 'ok');
           this.ui.log('state → waitingInput', 'info');
           this.ui.setHint('Картинка ' + markerName + ' найдена! Нажмите OK.');
+          playSound("click");
         }
 
         if (entry.dismissed) {
