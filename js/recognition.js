@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createArTargetSync } from './artarget.js';
 import { playSound } from './audio.js';
+import { QuestManager } from './quests.js';
 
 export class ImageRecognition {
   constructor(ui) {
@@ -11,6 +12,9 @@ export class ImageRecognition {
     // waitingImage  — ждём распознавания маркера
     // waitingInput  — маркер найден, ждём нажатия OK
     this.state = 'waitingImage';
+
+    // Менеджер квестов для сопоставления RecognitionImage -> Quest
+    this.questManager = new QuestManager();
 
     this._raycaster = new THREE.Raycaster();
     this._pointerNdc = new THREE.Vector2(0, 0);
@@ -141,12 +145,21 @@ export class ImageRecognition {
   }
 
   /**
-   * Загружает список картинок из манифеста и готовит ImageBitmap[] для XR Image Tracking.
+   * Загружает список картинок из манифеста, таблицы квестов и готовит ImageBitmap[] для XR Image Tracking.
    * При ошибке манифеста или загрузки — fallback на сгенерированный маркер.
    */
   async init() {
     this.state = 'waitingImage';
     this.targetBitmaps = [];
+
+    // Загрузка таблиц квестов и ответов
+    this.ui.log('Loading quest table & answers...', 'info');
+    await this.questManager.loadData();
+    if (this.questManager.isLoaded) {
+      this.ui.log(`Quest data loaded: ${this.questManager.quests.size} quests, ${this.questManager.answers.size} answers`, 'ok');
+    } else {
+      this.ui.log('Failed to load quest data, falling back to default marker info', 'warn');
+    }
 
     const list = await this.loadImageList();
 
@@ -337,8 +350,30 @@ export class ImageRecognition {
 
           const markerName = this.getMarkerName(idx);
 
-          // синхронный create — никаких Promise в frame loop
-          const arTarget = createArTargetSync(markerName, {
+          // Поиск квеста по имени маркера (recognitionImage == markerName)
+          const questData = this.questManager.getArTargetData(markerName);
+
+          if (questData && questData.questId) {
+            this.ui.log(`[Quest] Matched marker "${markerName}" to Quest ID "${questData.questId}"`, 'ok');
+            if (questData.question) {
+              this.ui.log(`[Quest] Question: "${questData.question}"`, 'info');
+            }
+          } else {
+            this.ui.log(`[Quest] No quest match for marker "${markerName}". Using fallback data.`, 'warn');
+          }
+
+          // Формируем объект данных для создания 3D панели ARTarget
+          const targetInfoData = {
+            title: questData?.title || markerName,
+            subtitle: questData?.question || 'AR Target', // Вывод вопроса quest.question
+            textLabel: questData?.questId ? `QUEST ${questData.questId}` : 'MARKER',
+            imgLabel: 'IMAGE',
+            okText: 'OK',
+            questData: questData // Сохраняем полный контекст квеста
+          };
+
+          // Синхронный create — никаких Promise в frame loop
+          const arTarget = createArTargetSync(targetInfoData, {
             onOk: () => {
               const e = this.trackedMarkers.get(idx);
               if (e) this._handleOk(e);
@@ -351,13 +386,17 @@ export class ImageRecognition {
           }
 
           arScene.scene.add(arTarget);
-          entry = { arTarget, lastState: trackingState, dismissed: false };
+          entry = { arTarget, lastState: trackingState, dismissed: false, questData };
           this.trackedMarkers.set(idx, entry);
 
           this.state = 'waitingInput';
-          this.ui.log('[' + idx + '] AR Target created: ' + markerName + ' (state=' + trackingState + ')', 'ok');
+          this.ui.log('[' + idx + '] AR Target created for marker: ' + markerName + ' (state=' + trackingState + ')', 'ok');
           this.ui.log('state → waitingInput', 'info');
-          this.ui.setHint('Картинка ' + markerName + ' найдена! Нажмите OK.');
+
+          const hintText = questData?.question 
+            ? `Квест (${markerName}): ${questData.question}` 
+            : `Картинка ${markerName} найдена! Нажмите OK.`;
+          this.ui.setHint(hintText);
           playSound("click");
         }
 
