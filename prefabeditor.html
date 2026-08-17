@@ -2,39 +2,258 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>AR Prefab Editor 3D</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Редактор — Квест Платформа</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; height: 100vh; background: #1a1a1a; color: #ccc; overflow: hidden; }
 
-    #sidebar { width: 320px; background: #252526; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; z-index: 10; }
-    .section { padding: 12px; border-bottom: 1px solid #3c3c3c; }
-    .section h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 10px; }
+    :root {
+      --bg: #0b1120;
+      --bg-light: #111827;
+      --card: #111827;
+      --border: rgba(148, 163, 184, .16);
+      --border-hover: rgba(129, 140, 248, .45);
 
-    button { background: #0e639c; color: #fff; border: none; padding: 6px 12px; border-radius: 2px; cursor: pointer; font-size: 12px; margin-right: 4px; margin-bottom: 4px; }
-    button:hover { background: #1177bb; }
-    button.btn-danger { background: #a83232; }
-    button.btn-danger:hover { background: #ce3c3c; }
-    button.btn-success { background: #28a745; }
-    button.btn-success:hover { background: #218838; }
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --dim: #475569;
 
-    input[type="text"], input[type="number"], select, textarea { width: 100%; background: #3c3c3c; border: 1px solid #555; color: #fff; padding: 4px 6px; font-size: 12px; margin-bottom: 8px; border-radius: 2px; }
-    label { font-size: 11px; color: #aaa; display: block; margin-bottom: 2px; }
+      --indigo: #6366f1;
+      --cyan: #06b6d4;
+      --gold: #daa520;
+      --danger: #e11d48;
+      --success: #10b981;
+    }
 
-    #tree { flex: 1; overflow-y: auto; padding: 6px; background: #1e1e1e; }
-    .tree-item { padding: 6px 8px; font-size: 12px; cursor: pointer; border-radius: 3px; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center; }
-    .tree-item:hover { background: #2a2d2e; }
-    .tree-item.active { background: #094771; color: #fff; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      height: 100vh;
+      background:
+        radial-gradient(circle at 50% -20%, rgba(99, 102, 241, .12), transparent 45%),
+        var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
 
-    #viewport { flex: 1; position: relative; }
-    #canvas3d { width: 100%; height: 100%; display: block; }
+    #sidebar {
+      width: 300px;
+      background: rgba(17, 24, 39, .92);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
 
-    #inspector { width: 300px; background: #252526; border-left: 1px solid #3c3c3c; padding: 12px; overflow-y: auto; z-index: 10; }
-    .prop-group { margin-bottom: 12px; }
-    .row { display: flex; gap: 6px; }
-    .row > div { flex: 1; }
+    .section {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
 
-    #render-canvas { display: none; }
+    .section h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #818cf8;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: rgba(99, 102, 241, .12);
+      color: #e2e8f0;
+      border: 1px solid rgba(99, 102, 241, .25);
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      margin-right: 6px;
+      margin-bottom: 6px;
+      transition: background .2s ease, border-color .2s ease, color .2s ease;
+    }
+
+    button:hover {
+      color: #fff;
+      background: linear-gradient(135deg, rgba(99, 102, 241, .85), rgba(6, 182, 212, .75));
+      border-color: transparent;
+    }
+
+    button.btn-danger {
+      background: rgba(225, 29, 72, .12);
+      border-color: rgba(225, 29, 72, .3);
+      color: #fda4af;
+    }
+
+    button.btn-danger:hover {
+      background: linear-gradient(135deg, #e11d48, #be123c);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    button.btn-success {
+      background: rgba(218, 165, 32, .15);
+      border-color: rgba(218, 165, 32, .3);
+      color: #fef08a;
+    }
+
+    button.btn-success:hover {
+      color: #1a1008;
+      background: linear-gradient(135deg, #daa520, #b8860b);
+      border-color: transparent;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      background: rgba(15, 23, 42, .8);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: 12px;
+      font-family: inherit;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      transition: border-color .2s ease;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: rgba(99, 102, 241, .5);
+    }
+
+    label {
+      font-size: 11px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+
+    #tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      background: rgba(11, 17, 32, .5);
+    }
+
+    .tree-item {
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 8px;
+      margin-bottom: 3px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid transparent;
+      transition: background .15s ease, border-color .15s ease;
+    }
+
+    .tree-item:hover {
+      background: rgba(99, 102, 241, .08);
+      border-color: var(--border);
+    }
+
+    .tree-item.active {
+      background: rgba(99, 102, 241, .18);
+      border-color: rgba(99, 102, 241, .35);
+      color: #fff;
+    }
+
+    .tree-item span:last-child {
+      color: var(--dim);
+      font-size: 10px;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+    }
+
+    #viewport {
+      flex: 1;
+      position: relative;
+      background: var(--bg);
+    }
+
+    #canvas3d {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #inspector {
+      width: 300px;
+      background: rgba(17, 24, 39, .92);
+      border-left: 1px solid var(--border);
+      padding: 16px 18px;
+      overflow-y: auto;
+      z-index: 10;
+    }
+
+    #inspector > h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #818cf8;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .prop-group {
+      margin-bottom: 14px;
+    }
+
+    .prop-group h3 {
+      font-size: 12px;
+      color: var(--text);
+      margin-bottom: 8px;
+      font-weight: 650;
+    }
+
+    .row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .row > div {
+      flex: 1;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 14px 0;
+    }
+
+    #render-canvas {
+      display: none;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, .2);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, .35);
+    }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -64,7 +283,7 @@
     <button onclick="addHtmlObject3D()">+ Other HTML</button>
   </div>
 
-  <div class="section" style="flex: 1; display: flex; flex-direction: column; border-bottom: none;">
+  <div class="section" style="flex: 1; display: flex; flex-direction: column; border-bottom: none; padding-bottom: 0;">
     <h3>Иерархия сцены</h3>
     <div id="tree"></div>
   </div>
@@ -77,14 +296,14 @@
 <div id="inspector">
   <h3>Свойства объекта</h3>
   <div id="inspector-content">
-    <p style="font-size: 12px; color: #666; margin-top: 10px;">Выберите элемент в сцене для редактирования.</p>
+    <p style="font-size: 13px; color: var(--muted); margin-top: 8px; line-height: 1.5;">Выберите элемент в сцене для редактирования.</p>
   </div>
 </div>
 
 <canvas id="render-canvas" width="512" height="512"></canvas>
 
 <script>
-  let scene, camera, renderer, orbitControls, transformControls;
+let scene, camera, renderer, orbitControls, transformControls;
   let selectedObject = null;
   const editableObjects = [];
 
@@ -113,7 +332,7 @@
     const container = document.getElementById('viewport');
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1e1e1e);
+    scene.background = new THREE.Color(0x0b1120);
 
     camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.01, 100);
     camera.position.set(0, 0.3, 0.5);
@@ -129,7 +348,7 @@
     dirLight.position.set(5, 10, 7);
     scene.add(dirLight);
 
-    const grid = new THREE.GridHelper(1, 20, 0x444444, 0x222222);
+    const grid = new THREE.GridHelper(1, 20, 0x1e293b, 0x111827);
     scene.add(grid);
 
     orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -400,8 +619,8 @@ ${innerTreeHtml}    </div>
     group.userData = { type: 'object3d', rawData: data, src: srcPath };
 
     const placeholder = new THREE.Mesh(
-            new THREE.BoxGeometry(0.05, 0.05, 0.05),
-            new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
+      new THREE.BoxGeometry(0.05, 0.05, 0.05),
+      new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
     );
     placeholder.name = 'placeholder';
     group.add(placeholder);
@@ -433,8 +652,8 @@ ${innerTreeHtml}    </div>
       group.userData.loadedObj = null;
     }
     const placeholder = new THREE.Mesh(
-            new THREE.BoxGeometry(0.05, 0.05, 0.05),
-            new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
+      new THREE.BoxGeometry(0.05, 0.05, 0.05),
+      new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
     );
     placeholder.name = 'placeholder';
     group.add(placeholder);
@@ -717,7 +936,7 @@ ${innerTreeHtml}    </div>
     selectedObject = null;
     transformControls.detach();
     updateHierarchyTree();
-    document.getElementById('inspector-content').innerHTML = `<p style="font-size: 12px; color: #666; margin-top: 10px;">Выберите элемент в сцене для редактирования.</p>`;
+    document.getElementById('inspector-content').innerHTML = `<p style="font-size: 13px; color: var(--muted); margin-top: 8px; line-height: 1.5;">Выберите элемент в сцене для редактирования.</p>`;
   }
 
   function updateHierarchyTree() {
@@ -727,7 +946,7 @@ ${innerTreeHtml}    </div>
     editableObjects.forEach(obj => {
       const div = document.createElement('div');
       div.className = 'tree-item' + (selectedObject === obj ? ' active' : '');
-      div.innerHTML = `<span>${obj.name}</span><span style="color:#666">${obj.userData.type}</span>`;
+      div.innerHTML = `<span>${obj.name}</span><span>${obj.userData.type}</span>`;
       div.onclick = () => selectObject(obj);
       treeContainer.appendChild(div);
     });
@@ -828,7 +1047,7 @@ ${innerTreeHtml}    </div>
         `;
     }
 
-    html += `<button class="btn-danger" onclick="deleteSelectedObject()" style="margin-top:20px; width:100%;">Удалить объект</button>`;
+    html += `<button class="btn-danger" onclick="deleteSelectedObject()" style="margin-top:16px; width:100%;">Удалить объект</button>`;
     container.innerHTML = html;
 
     if (obj.userData.type === 'panel') {
@@ -866,7 +1085,7 @@ ${innerTreeHtml}    </div>
     elements.forEach((el, index) => {
       if (el.type === 'video') {
         html += `
-            <div style="background:#1e1e1e; padding:8px; margin-bottom:6px; border-radius:3px;">
+            <div style="background:rgba(15,23,42,.8); padding:10px; margin-bottom:8px; border-radius:8px; border:1px solid var(--border);">
               <label>Тип: video</label>
               <label>Источник (URL)</label>
               <input type="text" value="${el.src || ''}" onchange="updateUIElement(${index}, 'src', this.value)">
@@ -877,12 +1096,12 @@ ${innerTreeHtml}    </div>
                 <div><label>Ширина</label><input type="number" value="${el.width || 200}" onchange="updateUIElement(${index}, 'width', this.value)"></div>
                 <div><label>Высота</label><input type="number" value="${el.height || 120}" onchange="updateUIElement(${index}, 'height', this.value)"></div>
               </div>
-              <button class="btn-danger" style="font-size:10px; padding:2px 6px;" onclick="removeUIElement(${index})">Удалить</button>
+              <button class="btn-danger" style="font-size:11px; padding:4px 8px;" onclick="removeUIElement(${index})">Удалить</button>
             </div>
           `;
       } else if (el.type === 'html') {
         html += `
-            <div style="background:#1e1e1e; padding:8px; margin-bottom:6px; border-radius:3px;">
+            <div style="background:rgba(15,23,42,.8); padding:10px; margin-bottom:8px; border-radius:8px; border:1px solid var(--border);">
               <label>Тип: other html</label>
               <textarea rows="4" style="width:100%; background:#3c3c3c; border:1px solid #555; color:#fff; font-size:11px; margin-bottom:8px; border-radius:2px; padding:4px 6px;" onchange="updateUIElement(${index}, 'html', this.value)">${el.html || ''}</textarea>
               <div class="row">
@@ -890,19 +1109,19 @@ ${innerTreeHtml}    </div>
                 <div><label>Ширина</label><input type="number" value="${el.width || 220}" onchange="updateUIElement(${index}, 'width', this.value)"></div>
                 <div><label>Высота</label><input type="number" value="${el.height || 150}" onchange="updateUIElement(${index}, 'height', this.value)"></div>
               </div>
-              <button class="btn-danger" style="font-size:10px; padding:2px 6px;" onclick="removeUIElement(${index})">Удалить</button>
+              <button class="btn-danger" style="font-size:11px; padding:4px 8px;" onclick="removeUIElement(${index})">Удалить</button>
             </div>
           `;
       } else {
         html += `
-            <div style="background:#1e1e1e; padding:8px; margin-bottom:6px; border-radius:3px;">
+            <div style="background:rgba(15,23,42,.8); padding:10px; margin-bottom:8px; border-radius:8px; border:1px solid var(--border);">
               <label>Тип: ${el.type}</label>
               <input type="text" value="${el.text || ''}" onchange="updateUIElement(${index}, 'text', this.value)">
               <div class="row">
                 <div><label>Y Pos</label><input type="number" value="${el.y || 0}" onchange="updateUIElement(${index}, 'y', this.value)"></div>
                 <div><label>Размер</label><input type="number" value="${el.fontSize || 20}" onchange="updateUIElement(${index}, 'fontSize', this.value)"></div>
               </div>
-              <button class="btn-danger" style="font-size:10px; padding:2px 6px;" onclick="removeUIElement(${index})">Удалить</button>
+              <button class="btn-danger" style="font-size:11px; padding:4px 8px;" onclick="removeUIElement(${index})">Удалить</button>
             </div>
           `;
       }
@@ -1024,14 +1243,14 @@ ${innerTreeHtml}    </div>
 
   function addPanel() {
     const panel = createPanelMesh(
-            {
-              name: 'Panel_' + Date.now().toString().slice(-3),
-              width: '0.3',
-              height: '0.3',
-              position: '0,0,0',
-              rotation: '0,0,0'
-            },
-            '<div class="panel"><div class="label">New Panel</div></div>'
+      {
+        name: 'Panel_' + Date.now().toString().slice(-3),
+        width: '0.3',
+        height: '0.3',
+        position: '0,0,0',
+        rotation: '0,0,0'
+      },
+      '<div class="panel"><div class="label">New Panel</div></div>'
     );
     scene.add(panel);
     editableObjects.push(panel);
@@ -1082,6 +1301,7 @@ ${innerTreeHtml}    </div>
   }
 
   window.onload = init3D;
+
 </script>
 </body>
 </html>
