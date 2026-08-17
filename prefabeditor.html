@@ -15,12 +15,14 @@
     button:hover { background: #1177bb; }
     button.btn-danger { background: #a83232; }
     button.btn-danger:hover { background: #ce3c3c; }
+    button.btn-success { background: #28a745; }
+    button.btn-success:hover { background: #218838; }
 
-    input[type="text"], input[type="number"], select { width: 100%; background: #3c3c3c; border: 1px solid #555; color: #fff; padding: 4px 6px; font-size: 12px; margin-bottom: 8px; border-radius: 2px; }
+    input[type="text"], input[type="number"], select, textarea { width: 100%; background: #3c3c3c; border: 1px solid #555; color: #fff; padding: 4px 6px; font-size: 12px; margin-bottom: 8px; border-radius: 2px; }
     label { font-size: 11px; color: #aaa; display: block; margin-bottom: 2px; }
 
     #tree { flex: 1; overflow-y: auto; padding: 6px; background: #1e1e1e; }
-    .tree-item { padding: 6px 8px; font-size: 12px; cursor: pointer; border-radius: 3px; margin-bottom: 2px; display: flex; justify-content: space-between; }
+    .tree-item { padding: 6px 8px; font-size: 12px; cursor: pointer; border-radius: 3px; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center; }
     .tree-item:hover { background: #2a2d2e; }
     .tree-item.active { background: #094771; color: #fff; }
 
@@ -46,9 +48,12 @@
   <div class="section">
     <h3>Локальные префабы</h3>
     <button onclick="loadLocalPrefab()">Загрузить дефолтный шаблон</button>
-    <button onclick="document.getElementById('file-input').click()">Открыть файл с диска...</button>
+    <button onclick="document.getElementById('file-input').click()">Открыть HTML...</button>
+    <button class="btn-success" onclick="document.getElementById('json-input').click()">Загрузить JSON дизайн</button>
     <button onclick="exportHTML()">Сохранить HTML</button>
+
     <input type="file" id="file-input" style="display:none" accept=".html,.template" onchange="handleFileSelect(event)">
+    <input type="file" id="json-input" style="display:none" accept=".json" onchange="handleJsonDesignSelect(event)">
   </div>
 
   <div class="section">
@@ -76,7 +81,7 @@
   </div>
 </div>
 
-<canvas id="render-canvas" width="256" height="384"></canvas>
+<canvas id="render-canvas" width="512" height="512"></canvas>
 
 <script>
   let scene, camera, renderer, orbitControls, transformControls;
@@ -147,7 +152,6 @@
 
     window.addEventListener('resize', onWindowResize);
 
-    // Загружаем шаблон перед запуском цикла анимации
     loadLocalPrefab();
     animate();
   }
@@ -172,6 +176,109 @@
     camera.aspect = container.clientWidth / container.clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
+  }
+
+  // Загрузка и парсинг JSON-дизайна в иерархическое дерево artargetprefab
+  function handleJsonDesignSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        buildDesignFromJson(data);
+      } catch (err) {
+        alert('Ошибка при чтении JSON: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function buildDesignFromJson(jsonData) {
+    if (!Array.isArray(jsonData) || jsonData.length < 2) {
+      alert('Неверный формат JSON-дизайна.');
+      return;
+    }
+
+    const headers = jsonData[0];
+    // Берём первую строку данных с визуальными свойствами
+    const values = jsonData[1];
+
+    const nodesTree = {};
+
+    headers.forEach((header, index) => {
+      const val = values[index];
+      if (val === undefined || val === null || val === '') return;
+      if (header === 'id' || header === 'name' || header === 'Res_Check') return;
+
+      // Игнорируем Sound
+      if (header.endsWith('_Sound')) return;
+
+      const parts = header.split('_');
+      const propType = parts.pop(); // Font, Color, Image, FX, Text
+
+      // Фильтруем свойства, если это не нужные нам ключи
+      if (!['Font', 'Color', 'Image', 'FX', 'Text', 'Prefab'].includes(propType)) return;
+
+      let current = nodesTree;
+      parts.forEach((part, i) => {
+        if (!current[part]) {
+          current[part] = { _props: {}, _children: {} };
+        }
+        if (i === parts.length - 1) {
+          current[part]._props[propType] = val;
+        } else {
+          current = current[part]._children;
+        }
+      });
+    });
+
+    function renderNodeToHtml(nodeName, nodeData, depth = 1) {
+      const indent = '  '.repeat(depth + 2);
+      const props = nodeData._props;
+      const childrenKeys = Object.keys(nodeData._children);
+
+      let attrStr = `class="design-node node-${nodeName.toLowerCase()}" data-name="${nodeName}"`;
+      if (props.Font) attrStr += ` data-font="${props.Font}"`;
+      if (props.Color) attrStr += ` data-color="${props.Color}"`;
+      if (props.Image) attrStr += ` data-image="${props.Image}"`;
+      if (props.FX) attrStr += ` data-fx="${props.FX}"`;
+      if (props.Prefab) attrStr += ` data-prefab="${props.Prefab}"`;
+
+      let childrenHtml = '';
+      if (props.Text) {
+        childrenHtml += `
+${indent}  <span class="label-text">${props.Text}</span>`;
+      }
+
+      childrenKeys.forEach(childName => {
+        childrenHtml += '
+' + renderNodeToHtml(childName, nodeData._children[childName], depth + 1);
+      });
+
+      if (childrenHtml) {
+        return `${indent}<div ${attrStr}>${childrenHtml}
+${indent}</div>`;
+      } else {
+        return `${indent}<div ${attrStr}></div>`;
+      }
+    }
+
+    let innerTreeHtml = '';
+    Object.keys(nodesTree).forEach(rootKey => {
+      innerTreeHtml += renderNodeToHtml(rootKey, nodesTree[rootKey], 1) + '
+';
+    });
+
+    const generatedTemplate = `<template id="ar-target">
+  <panel name="artargetprefab" data-width="0.3" data-height="0.4" data-position="0,0.1,0" data-rotation="0,0,0">
+    <div class="panel artarget-root">
+${innerTreeHtml}    </div>
+  </panel>
+</template>`;
+
+    parseAndBuildPrefab(generatedTemplate);
   }
 
   function renderPanelToCanvas(panelData) {
@@ -282,8 +389,8 @@
     group.userData = { type: 'object3d', rawData: data, src: data.src || '' };
 
     const placeholder = new THREE.Mesh(
-            new THREE.BoxGeometry(0.05, 0.05, 0.05),
-            new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
+      new THREE.BoxGeometry(0.05, 0.05, 0.05),
+      new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
     );
     placeholder.name = 'placeholder';
     group.add(placeholder);
@@ -315,8 +422,8 @@
       group.userData.loadedObj = null;
     }
     const placeholder = new THREE.Mesh(
-            new THREE.BoxGeometry(0.05, 0.05, 0.05),
-            new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
+      new THREE.BoxGeometry(0.05, 0.05, 0.05),
+      new THREE.MeshStandardMaterial({ color: 0x666666, wireframe: true })
     );
     placeholder.name = 'placeholder';
     group.add(placeholder);
@@ -390,8 +497,8 @@
   }
 
   function createPanelMesh(data = {}, innerHTML = '') {
-    const width = parseFloat(data.width) || 0.2;
-    const height = parseFloat(data.height) || 0.2;
+    const width = parseFloat(data.width) || 0.3;
+    const height = parseFloat(data.height) || 0.3;
     const geo = new THREE.PlaneGeometry(width, height);
 
     const panelData = parsePanelHTML(innerHTML);
@@ -414,6 +521,36 @@
   function parsePanelHTML(html) {
     const panelData = { bgColor: '#0a0a30', borderColor: '#00ffaa', elements: [] };
     if (!html) return panelData;
+
+    if (html.includes('artarget-root')) {
+      panelData.bgColor = '#141428';
+      panelData.borderColor = '#FFD700';
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+      const nodes = doc.querySelectorAll('.design-node');
+
+      let currentY = 30;
+      nodes.forEach(node => {
+        const name = node.getAttribute('data-name') || '';
+        const color = node.getAttribute('data-color') || '#ffffff';
+        const image = node.getAttribute('data-image') || '';
+        const textSpan = node.querySelector('.label-text');
+        const labelText = textSpan ? textSpan.textContent : '';
+
+        if (labelText || name) {
+          panelData.elements.push({
+            type: 'text',
+            text: `${name}${labelText ? ': ' + labelText : ''} ${image ? '[' + image + ']' : ''}`,
+            y: currentY,
+            fontSize: 16,
+            color: color.startsWith('#') ? color : '#' + color
+          });
+          currentY += 24;
+        }
+      });
+      return panelData;
+    }
 
     if (html.includes('img-panel')) {
       panelData.bgColor = '#1a0033';
@@ -843,14 +980,14 @@
 
   function addPanel() {
     const panel = createPanelMesh(
-            {
-              name: 'Panel_' + Date.now().toString().slice(-3),
-              width: '0.2',
-              height: '0.2',
-              position: '0,0,0',
-              rotation: '0,0,0'
-            },
-            '<div class="panel"><div class="label">New Panel</div></div>'
+      {
+        name: 'Panel_' + Date.now().toString().slice(-3),
+        width: '0.3',
+        height: '0.3',
+        position: '0,0,0',
+        rotation: '0,0,0'
+      },
+      '<div class="panel"><div class="label">New Panel</div></div>'
     );
     scene.add(panel);
     editableObjects.push(panel);
@@ -868,7 +1005,8 @@
   }
 
   function exportHTML() {
-    let output = `<template id="ar-target">\n`;
+    let output = `<template id="ar-target">
+`;
 
     editableObjects.forEach(obj => {
       const pos = `${obj.position.x.toFixed(3)},${obj.position.y.toFixed(3)},${obj.position.z.toFixed(3)}`;
@@ -879,56 +1017,82 @@
       const scl = `${obj.scale.x.toFixed(3)},${obj.scale.y.toFixed(3)},${obj.scale.z.toFixed(3)}`;
 
       if (obj.userData.type === 'object3d') {
-        output += `  <model\n`;
-        output += `    name="${obj.name}"\n`;
-        output += `    data-src="${obj.userData.src || ''}"\n`;
-        output += `    data-position="${pos}"\n`;
-        output += `    data-rotation="${rot}"\n`;
-        output += `    data-scale="${scl}"\n`;
-        output += `  ></model>\n`;
+        output += `  <model
+`;
+        output += `    name="${obj.name}"
+`;
+        output += `    data-src="${obj.userData.src || ''}"
+`;
+        output += `    data-position="${pos}"
+`;
+        output += `    data-rotation="${rot}"
+`;
+        output += `    data-scale="${scl}"
+`;
+        output += `  ></model>
+`;
       } else if (obj.userData.type === 'panel') {
-        output += `  <panel\n`;
-        output += `    name="${obj.name}"\n`;
-        output += `    data-width="0.2"\n`;
-        output += `    data-height="0.2"\n`;
-        output += `    data-position="${pos}"\n`;
-        output += `    data-rotation="${rot}"\n`;
-        output += `    data-scale="${scl}"\n`;
-        output += `  >\n`;
+        output += `  <panel
+`;
+        output += `    name="${obj.name}"
+`;
+        output += `    data-width="${obj.userData.rawData.width || '0.3'}"
+`;
+        output += `    data-height="${obj.userData.rawData.height || '0.3'}"
+`;
+        output += `    data-position="${pos}"
+`;
+        output += `    data-rotation="${rot}"
+`;
+        output += `    data-scale="${scl}"
+`;
+        output += `  >
+`;
 
-        output += `    <div class="panel">\n`;
-        (obj.userData.panelData.elements || []).forEach(el => {
-          if (el.type === 'video') {
-            output += `      <video data-src="${el.src || ''}" data-y="${el.y || 0}" data-width="${el.width || 200}" data-height="${el.height || 120}" data-label="${el.label || ''}"></video>\n`;
-          } else if (el.type === 'html') {
-            output += `      <div class="html-block" data-raw-b64="${encodeHtmlB64(el.html || '')}" data-y="${el.y || 0}" data-width="${el.width || 220}" data-height="${el.height || 150}"></div>\n`;
-          } else {
-            output += `      <div class="${el.type}">${el.text || ''}</div>\n`;
-          }
-        });
-        output += `    </div>\n`;
-        output += `  </panel>\n`;
+        output += obj.userData.innerHTML || `    <div class="panel"></div>
+`;
+        output += `  </panel>
+`;
       } else if (obj.userData.type === 'video') {
-        output += `  <video\n`;
-        output += `    name="${obj.name}"\n`;
-        output += `    data-src="${obj.userData.src || ''}"\n`;
-        output += `    data-label="${obj.userData.label || ''}"\n`;
-        output += `    data-width="${obj.userData.width}"\n`;
-        output += `    data-height="${obj.userData.height}"\n`;
-        output += `    data-position="${pos}"\n`;
-        output += `    data-rotation="${rot}"\n`;
-        output += `    data-scale="${scl}"\n`;
-        output += `  ></video>\n`;
+        output += `  <video
+`;
+        output += `    name="${obj.name}"
+`;
+        output += `    data-src="${obj.userData.src || ''}"
+`;
+        output += `    data-label="${obj.userData.label || ''}"
+`;
+        output += `    data-width="${obj.userData.width}"
+`;
+        output += `    data-height="${obj.userData.height}"
+`;
+        output += `    data-position="${pos}"
+`;
+        output += `    data-rotation="${rot}"
+`;
+        output += `    data-scale="${scl}"
+`;
+        output += `  ></video>
+`;
       } else if (obj.userData.type === 'html') {
-        output += `  <htmlblock\n`;
-        output += `    name="${obj.name}"\n`;
-        output += `    data-raw-b64="${encodeHtmlB64(obj.userData.html || '')}"\n`;
-        output += `    data-width="${obj.userData.width}"\n`;
-        output += `    data-height="${obj.userData.height}"\n`;
-        output += `    data-position="${pos}"\n`;
-        output += `    data-rotation="${rot}"\n`;
-        output += `    data-scale="${scl}"\n`;
-        output += `  ></htmlblock>\n`;
+        output += `  <htmlblock
+`;
+        output += `    name="${obj.name}"
+`;
+        output += `    data-raw-b64="${encodeHtmlB64(obj.userData.html || '')}"
+`;
+        output += `    data-width="${obj.userData.width}"
+`;
+        output += `    data-height="${obj.userData.height}"
+`;
+        output += `    data-position="${pos}"
+`;
+        output += `    data-rotation="${rot}"
+`;
+        output += `    data-scale="${scl}"
+`;
+        output += `  ></htmlblock>
+`;
       }
     });
 
