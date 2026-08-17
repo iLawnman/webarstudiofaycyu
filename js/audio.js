@@ -1,20 +1,13 @@
-// js/audio.js
-
-const SOUND_MAP = {
-    click: './assets/click.mp3',
-};
-
 let audioCtx = null;
+const audioBuffers = new Map();
 
 function getCtx() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-
     if (audioCtx.state === 'suspended') {
         audioCtx.resume().catch(() => {});
     }
-
     return audioCtx;
 }
 
@@ -47,66 +40,78 @@ function playGeneratedClick() {
 }
 
 /**
- * Check that an audio asset actually exists before trying to play it.
+ * Загрузка звукового файла в память Web Audio API.
  */
-async function assetExists(src) {
-    try {
-        const response = await fetch(src, {
-            method: 'HEAD',
-            cache: 'no-store'
-        });
-
-        return response.ok;
-    } catch {
-        return false;
-    }
+async function loadAudioFile(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Status ${response.status}`);
+    const arrayBuffer = await response.arrayBuffer();
+    const ctx = getCtx();
+    return await ctx.decodeAudioData(arrayBuffer);
 }
 
 /**
- * Play sound by key.
- *
- * Asset convention:
- *   /assets/<key>.mp3
- *
- * If the asset does not exist, generated click is used as fallback.
+ * Инициализация и предзагрузка всех доступных звуков на старте.
+ * Никаких конкретных имен файлов в коде: имя ключа берется из имени файла.
  */
-export async function playSound(soundKey) {
-    if (!soundKey) {
-        console.warn('[Audio] Empty sound key');
-        playGeneratedClick();
-        return;
+export async function initAudio() {
+    // Вариант 1: Для Vite / Webpack (автоматически видит все .mp3 в папке assets)
+    let modules = {};
+    if (import.meta && import.meta.glob) {
+        modules = import.meta.glob('../assets/*.mp3', { eager: true, as: 'url' });
     }
 
-    const src = SOUND_MAP[soundKey] || `/assets/${soundKey}.mp3`;
+    const entries = Object.entries(modules);
 
-    if (!(await assetExists(src))) {
-        console.warn(
-            `[Audio] Sound "${soundKey}" not found: ${src}. Using generated click fallback.`
-        );
+    // Вариант 2: Запасной список путей, если проект без сборщика
+    const filesToLoad = entries.length > 0
+        ? entries.map(([path, url]) => ({ path, url: url.default || url }))
+        : ['./assets/click.mp3'].map(url => ({ path: url, url }));
 
+    await Promise.allSettled(
+        filesToLoad.map(async ({ path, url }) => {
+            // Извлекаем имя ключа (например, "click" из "./assets/click.mp3")
+            const key = path.split('/').pop().replace(/\.[^/.]+$/, "");
+            try {
+                const buffer = await loadAudioFile(url);
+                audioBuffers.set(key, buffer);
+            } catch (err) {
+                console.warn(`[Audio] Не удалось загрузить звук "${key}":`, err);
+            }
+        })
+    );
+}
+
+/**
+ * Воспроизведение предзагруженного звука по ключу.
+ */
+export function playSound(soundKey) {
+    if (!soundKey || !audioBuffers.has(soundKey)) {
+        if (soundKey) {
+            console.warn(`[Audio] Sound "${soundKey}" not preloaded. Using fallback.`);
+        }
         playGeneratedClick();
         return;
     }
 
     try {
-        const audio = new Audio(src);
-        audio.volume = 0.6;
+        const ctx = getCtx();
+        const source = ctx.createBufferSource();
+        const gainNode = ctx.createGain();
 
-        await audio.play();
+        source.buffer = audioBuffers.get(soundKey);
+        gainNode.gain.value = 0.6;
+
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        source.start(0);
     } catch (error) {
-        console.warn(
-            `[Audio] Failed to play "${soundKey}" from ${src}. Using generated click fallback.`,
-            error
-        );
-
+        console.warn(`[Audio] Failed to play "${soundKey}":`, error);
         playGeneratedClick();
     }
 }
 
-/**
- * Wire pointer interactions to the click sound.
- * pointerdown covers mouse, touch and pen.
- */
 export function enableClickSounds() {
     const handler = () => {
         playSound('click');
@@ -117,14 +122,16 @@ export function enableClickSounds() {
     });
 }
 
-// Auto-enable
+// Автозапуск предзагрузки и навешивание событий
 if (typeof document !== 'undefined') {
-    if (document.readyState === 'loading') {
-        document.addEventListener(
-            'DOMContentLoaded',
-            enableClickSounds
-        );
-    } else {
+    const start = () => {
+        initAudio();
         enableClickSounds();
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
     }
 }
