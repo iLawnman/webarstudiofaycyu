@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>AR Prefab Editor 3D</title>
+  <title>+ Local AR Prefab Editor 3D</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; height: 100vh; background: #1a1a1a; color: #ccc; overflow: hidden; }
@@ -137,7 +137,6 @@
     const mouse = new THREE.Vector2();
 
     renderer.domElement.addEventListener('pointerdown', (e) => {
-      // Игнорируем выбор кликом, если в этот момент перетаскивается объект через TransformControls
       if (transformControls.dragging) return;
 
       const rect = renderer.domElement.getBoundingClientRect();
@@ -206,64 +205,71 @@
     const headers = jsonData[0];
     const values = jsonData[1];
 
-    const nodesTree = {};
+    const panelsMap = {};
 
     headers.forEach((header, index) => {
       const val = values[index];
       if (val === undefined || val === null || val === '') return;
       if (header === 'id' || header === 'name' || header === 'Res_Check') return;
-
       if (header.endsWith('_Sound')) return;
 
-      const parts = header.split('_');
-      const propType = parts.pop();
+      const separatorIndex = header.indexOf('_');
+      if (separatorIndex === -1) return;
 
-      if (!['Font', 'Color', 'Image', 'FX', 'Text', 'Prefab'].includes(propType)) return;
+      const panelName = header.substring(0, separatorIndex);
+      const propType = header.substring(separatorIndex + 1);
 
-      let current = nodesTree;
-      parts.forEach((part, i) => {
-        if (!current[part]) {
-          current[part] = { _props: {}, _children: {} };
-        }
-        if (i === parts.length - 1) {
-          current[part]._props[propType] = val;
-        } else {
-          current = current[part]._children;
-        }
-      });
+      if (!panelsMap[panelName]) {
+        panelsMap[panelName] = {
+          name: panelName,
+          props: {}
+        };
+      }
+
+      if (['Font', 'Color', 'Image', 'FX', 'Text', 'Prefab'].includes(propType)) {
+        panelsMap[panelName].props[propType] = val;
+      }
     });
 
-    function renderNodeToHtml(nodeName, nodeData, depth = 1) {
-      const indent = '  '.repeat(depth + 2);
-      const props = nodeData._props;
-      const childrenKeys = Object.keys(nodeData._children);
+    let innerTreeHtml = '';
 
-      let attrStr = `class="design-node node-${nodeName.toLowerCase()}" data-name="${nodeName}"`;
-      if (props.Font) attrStr += ` data-font="${props.Font}"`;
-      if (props.Color) attrStr += ` data-color="${props.Color}"`;
-      if (props.Image) attrStr += ` data-image="${props.Image}"`;
-      if (props.FX) attrStr += ` data-fx="${props.FX}"`;
-      if (props.Prefab) attrStr += ` data-prefab="${props.Prefab}"`;
+    Object.keys(panelsMap).forEach(panelName => {
+      const panel = panelsMap[panelName];
+      const props = panel.props;
 
       let childrenHtml = '';
-      if (props.Text) {
-        childrenHtml += `\n${indent}  <span class="label-text">${props.Text}</span>`;
+
+      // Если в группе есть изображение _Image
+      if (props.Image) {
+        let imgAttrStr = `class="panel-image" src="${props.Image}" alt="${panelName}_img"`;
+        if (props.Color) imgAttrStr += ` data-color="${props.Color}"`;
+        if (props.FX) imgAttrStr += ` data-fx="${props.FX}"`;
+
+        childrenHtml += `\n      <img ${imgAttrStr} />`;
       }
 
-      childrenKeys.forEach(childName => {
-        childrenHtml += `\n` + renderNodeToHtml(childName, nodeData._children[childName], depth + 1);
-      });
+      // Если в группе есть текстовые свойства (_Font, _Text) или только стили без картинки
+      const hasTextSpecific = props.Font || props.Text || props.Prefab;
+      const needTextBlock = hasTextSpecific || (!props.Image && (props.Color || props.FX));
 
-      if (childrenHtml) {
-        return `${indent}<div ${attrStr}>${childrenHtml}\n${indent}</div>`;
-      } else {
-        return `${indent}<div ${attrStr}></div>`;
+      if (needTextBlock) {
+        let textAttrStr = `class="panel-text-block"`;
+        if (props.Font) textAttrStr += ` data-font="${props.Font}"`;
+        if (props.Color) textAttrStr += ` data-color="${props.Color}"`;
+        if (props.FX) textAttrStr += ` data-fx="${props.FX}"`;
+        if (props.Prefab) textAttrStr += ` data-prefab="${props.Prefab}"`;
+
+        const displayContent = props.Text ? props.Text : (props.Image ? '' : panelName);
+        if (displayContent || hasTextSpecific) {
+          childrenHtml += `\n      <div ${textAttrStr}>`;
+          childrenHtml += `\n        <span class="label-text">${displayContent}</span>`;
+          childrenHtml += `\n      </div>`;
+        }
       }
-    }
 
-    let innerTreeHtml = '';
-    Object.keys(nodesTree).forEach(rootKey => {
-      innerTreeHtml += renderNodeToHtml(rootKey, nodesTree[rootKey], 1) + '\n';
+      innerTreeHtml += `    <div class="design-node panel-group" data-name="${panelName}">`;
+      innerTreeHtml += childrenHtml;
+      innerTreeHtml += `\n    </div>\n`;
     });
 
     const generatedTemplate = `<template id="ar-target">
@@ -523,26 +529,54 @@ ${innerTreeHtml}    </div>
 
       const parser = new DOMParser();
       const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
-      const nodes = doc.querySelectorAll('.design-node');
+      const groups = doc.querySelectorAll('.panel-group');
 
       let currentY = 30;
-      nodes.forEach(node => {
-        const name = node.getAttribute('data-name') || '';
-        const color = node.getAttribute('data-color') || '#ffffff';
-        const image = node.getAttribute('data-image') || '';
-        const textSpan = node.querySelector('.label-text');
-        const labelText = textSpan ? textSpan.textContent : '';
+      groups.forEach(group => {
+        const groupName = group.getAttribute('data-name') || '';
 
-        if (labelText || name) {
+        // Картинка с возможными атрибутами _Color / _FX
+        const img = group.querySelector('img.panel-image');
+        if (img) {
+          const src = img.getAttribute('src');
+          const imgColor = img.getAttribute('data-color') || '';
+          const imgFx = img.getAttribute('data-fx') || '';
+          let imgDetails = `[IMG: ${src}]`;
+          if (imgColor) imgDetails += ` (Color: #${imgColor})`;
+          if (imgFx) imgDetails += ` (FX: ${imgFx})`;
+
           panelData.elements.push({
             type: 'text',
-            text: `${name}${labelText ? ': ' + labelText : ''} ${image ? '[' + image + ']' : ''}`,
+            text: imgDetails,
+            y: currentY,
+            fontSize: 14,
+            color: '#888888'
+          });
+          currentY += 20;
+        }
+
+        // Текст с атрибутами
+        const textBlock = group.querySelector('.panel-text-block');
+        if (textBlock) {
+          const color = textBlock.getAttribute('data-color') || '#ffffff';
+          const fx = textBlock.getAttribute('data-fx') || '';
+          const textSpan = textBlock.querySelector('.label-text');
+          const labelText = textSpan ? textSpan.textContent : '';
+
+          let displayStr = `${groupName}: ${labelText}`;
+          if (fx) displayStr += ` (FX: ${fx})`;
+
+          panelData.elements.push({
+            type: 'text',
+            text: displayStr,
             y: currentY,
             fontSize: 16,
             color: color.startsWith('#') ? color : '#' + color
           });
           currentY += 24;
         }
+
+        currentY += 10;
       });
       return panelData;
     }
