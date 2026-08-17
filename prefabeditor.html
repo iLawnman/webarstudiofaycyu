@@ -402,7 +402,7 @@ ${innerTreeHtml}    </div>
   }
 
   function loadObjIntoGroup(group, src, placeholder) {
-    const path = src.startsWith('/assets/') ? src : '/assets/' + src;
+    const path = src.startsWith('./assets/') ? src : './assets/' + src;
     objLoader.load(path, obj => {
       if (placeholder && placeholder.parent === group) group.remove(placeholder);
       obj.traverse(child => {
