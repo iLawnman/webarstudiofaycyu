@@ -19,34 +19,52 @@ export class ModelFactory {
 
     /**
      * Abstract AR object: panels + layout come from declarative HTML.
-     * @param {string} [markerName='T1']
+     * @param {string|object} [targetData=''] Target identifier or data object
      * @param {object} [options]
      * @param {Function|null} [options.onOk]
      * @param {string} [options.templateUrl]
+     * @param {object} [options.vars] Additional variables for template substitution
      * @returns {Promise<THREE.Group>}
      */
-    async createArTarget(markerName = 'T1', options = {}) {
-        const { onOk = null, templateUrl = this.templateUrl } = options;
+    async createArTarget(targetData = '', options = {}) {
+        const { onOk = null, templateUrl = this.templateUrl, vars: extraVars = {} } = options;
+
+        const targetInfo = typeof targetData === 'object' && targetData !== null
+            ? targetData
+            : { title: String(targetData) };
+
+        const title = targetInfo.title ?? targetInfo.name ?? String(targetData ?? '');
+        const groupName = targetInfo.id || title || 'target';
 
         const group = new THREE.Group();
-        group.name = `arTarget_${markerName}`;
+        group.name = `arTarget_${groupName}`;
 
         const sphere = this._createSphere();
         group.add(sphere);
 
         const template = await this._loadTemplate(templateUrl);
         const panels = template.querySelectorAll('panel');
-        const vars = { markerName: String(markerName) };
+
+        const templateVars = {
+            title: title,
+            textLabel: targetInfo.textLabel ?? 'MARKER',
+            imgLabel: targetInfo.imgLabel ?? 'IMAGE',
+            subtitle: targetInfo.subtitle ?? 'AR Target',
+            okText: targetInfo.okText ?? 'OK',
+            markerName: title, // Backward compatibility for existing template references
+            ...extraVars
+        };
 
         const userData = {
-            markerName,
+            targetInfo,
+            markerName: title, // Legacy backward compatibility
             sphere,
             onOk,
             panels: {}
         };
 
         for (const panelEl of panels) {
-            const mesh = await this._createPanelFromHtml(panelEl, vars);
+            const mesh = await this._createPanelFromHtml(panelEl, templateVars);
             group.add(mesh);
             userData.panels[mesh.name] = mesh;
             userData[mesh.name] = mesh; // legacy direct access
@@ -63,15 +81,27 @@ export class ModelFactory {
 
     /**
      * Pure-canvas fallback (no network / no foreignObject) — for offline use.
-     * @param {string} [markerName='T1']
+     * @param {string|object} [targetData=''] Target identifier or data object
      * @param {object} [options]
      * @param {Function|null} [options.onOk]
      * @returns {THREE.Group}
      */
-    createArTargetSync(markerName = 'T1', options = {}) {
+    createArTargetSync(targetData = '', options = {}) {
         const { onOk = null } = options;
+
+        const targetInfo = typeof targetData === 'object' && targetData !== null
+            ? targetData
+            : { title: String(targetData) };
+
+        const title = targetInfo.title ?? targetInfo.name ?? String(targetData ?? '');
+        const textLabel = targetInfo.textLabel ?? 'MARKER';
+        const imgLabel = targetInfo.imgLabel ?? 'IMAGE';
+        const subtitle = targetInfo.subtitle ?? 'AR Target';
+        const okText = targetInfo.okText ?? 'OK';
+        const groupName = targetInfo.id || title || 'target';
+
         const group = new THREE.Group();
-        group.name = `arTarget_${markerName}`;
+        group.name = `arTarget_${groupName}`;
 
         const sphere = this._createSphere();
         group.add(sphere);
@@ -80,7 +110,7 @@ export class ModelFactory {
             name: 'textPanel',
             w: 0.12, h: 0.18,
             pos: [-0.12, 0, 0.02],
-            rotX: -Math.PI / 2,
+            rot: [-Math.PI / 2, (20 * Math.PI) / 180, 0],
             draw: (ctx, cw, ch) => {
                 ctx.fillStyle = 'rgba(10, 10, 30, 0.92)';
                 ctx.fillRect(0, 0, cw, ch);
@@ -90,13 +120,13 @@ export class ModelFactory {
                 ctx.fillStyle = '#00ffaa';
                 ctx.font = 'bold 28px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('MARKER', cw / 2, 60);
+                ctx.fillText(textLabel, cw / 2, 60);
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 36px sans-serif';
-                ctx.fillText(String(markerName), cw / 2, 200);
+                ctx.fillText(title, cw / 2, 200);
                 ctx.fillStyle = '#aaaaaa';
                 ctx.font = '20px sans-serif';
-                ctx.fillText('AR Target', cw / 2, 280);
+                ctx.fillText(subtitle, cw / 2, 280);
             }
         });
         group.add(textPanel);
@@ -105,7 +135,7 @@ export class ModelFactory {
             name: 'imgPanel',
             w: 0.12, h: 0.18,
             pos: [0.12, 0, 0.02],
-            rotX: -Math.PI / 2,
+            rot: [-Math.PI / 2, (-20 * Math.PI) / 180, 0],
             draw: (ctx, cw, ch) => {
                 const grad = ctx.createLinearGradient(0, 0, 0, ch);
                 grad.addColorStop(0, '#1a0033');
@@ -124,10 +154,10 @@ export class ModelFactory {
                 ctx.fillStyle = '#ff66cc';
                 ctx.font = 'bold 22px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('IMAGE', cw / 2, 50);
+                ctx.fillText(imgLabel, cw / 2, 50);
                 ctx.fillStyle = '#ffffff';
                 ctx.font = '18px sans-serif';
-                ctx.fillText(String(markerName), cw / 2, 340);
+                ctx.fillText(title, cw / 2, 340);
             }
         });
         group.add(imgPanel);
@@ -135,8 +165,8 @@ export class ModelFactory {
         const okPanel = this._makeCanvasPanel({
             name: 'okButton',
             w: 0.16, h: 0.06,
-            pos: [0, -0.14, 0.02],
-            rotX: -Math.PI / 2,
+            pos: [0, -0.22, 0.02],
+            rot: [-Math.PI / 2, 0, 0],
             canvasW: 256, canvasH: 96,
             draw: (ctx, cw, ch) => {
                 ctx.fillStyle = 'rgba(0, 40, 20, 0.95)';
@@ -151,14 +181,15 @@ export class ModelFactory {
                 ctx.font = 'bold 40px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText('OK', cw / 2, ch / 2);
+                ctx.fillText(okText, cw / 2, ch / 2);
             }
         });
         group.add(okPanel);
 
         group.position.z = 0.02;
         group.userData = {
-            markerName,
+            targetInfo,
+            markerName: title, // Legacy backward compatibility
             sphere,
             textPanel,
             imgPanel,
@@ -203,7 +234,7 @@ export class ModelFactory {
 
         let inner = panelEl.innerHTML;
         for (const [k, v] of Object.entries(vars)) {
-            inner = inner.replaceAll(`{{${k}}}`, v);
+            inner = inner.replaceAll(`{{${k}}}`, String(v ?? ''));
         }
 
         const { cssW, cssH } = this._measurePanelCss(panelEl);
@@ -308,7 +339,7 @@ export class ModelFactory {
         return parts.length === 3 && parts.every(Number.isFinite) ? parts : fallback.slice();
     }
 
-    _makeCanvasPanel({ name, w, h, pos, rotX, canvasW = 256, canvasH = 384, draw }) {
+    _makeCanvasPanel({ name, w, h, pos, rotX, rot = [rotX ?? -Math.PI / 2, 0, 0], canvasW = 256, canvasH = 384, draw }) {
         const canvas = document.createElement('canvas');
         canvas.width = canvasW;
         canvas.height = canvasH;
@@ -325,7 +356,7 @@ export class ModelFactory {
         );
         mesh.name = name;
         mesh.position.set(...pos);
-        mesh.rotation.x = rotX;
+        mesh.rotation.set(...rot);
         mesh.userData.texture = tex;
         return mesh;
     }
@@ -350,19 +381,19 @@ export class ModelFactory {
 const defaultFactory = new ModelFactory();
 
 /**
- * @param {string} [markerName='T1']
+ * @param {string|object} [targetData]
  * @param {object} [options]
  * @returns {Promise<THREE.Group>}
  */
-export async function createArTarget(markerName = 'T1', options = {}) {
-    return defaultFactory.createArTarget(markerName, options);
+export async function createArTarget(targetData, options = {}) {
+    return defaultFactory.createArTarget(targetData, options);
 }
 
 /**
- * @param {string} [markerName='T1']
+ * @param {string|object} [targetData]
  * @param {object} [options]
  * @returns {THREE.Group}
  */
-export function createArTargetSync(markerName = 'T1', options = {}) {
-    return defaultFactory.createArTargetSync(markerName, options);
+export function createArTargetSync(targetData, options = {}) {
+    return defaultFactory.createArTargetSync(targetData, options);
 }
