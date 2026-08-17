@@ -137,6 +137,9 @@
     const mouse = new THREE.Vector2();
 
     renderer.domElement.addEventListener('pointerdown', (e) => {
+      // Игнорируем выбор кликом, если в этот момент перетаскивается объект через TransformControls
+      if (transformControls.dragging) return;
+
       const rect = renderer.domElement.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -178,7 +181,6 @@
     renderer.setSize(container.clientWidth, container.clientHeight);
   }
 
-  // Загрузка и парсинг JSON-дизайна в иерархическое дерево artargetprefab
   function handleJsonDesignSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -202,7 +204,6 @@
     }
 
     const headers = jsonData[0];
-    // Берём первую строку данных с визуальными свойствами
     const values = jsonData[1];
 
     const nodesTree = {};
@@ -212,13 +213,11 @@
       if (val === undefined || val === null || val === '') return;
       if (header === 'id' || header === 'name' || header === 'Res_Check') return;
 
-      // Игнорируем Sound
       if (header.endsWith('_Sound')) return;
 
       const parts = header.split('_');
-      const propType = parts.pop(); // Font, Color, Image, FX, Text
+      const propType = parts.pop();
 
-      // Фильтруем свойства, если это не нужные нам ключи
       if (!['Font', 'Color', 'Image', 'FX', 'Text', 'Prefab'].includes(propType)) return;
 
       let current = nodesTree;
@@ -248,18 +247,15 @@
 
       let childrenHtml = '';
       if (props.Text) {
-        childrenHtml += `
-${indent}  <span class="label-text">${props.Text}</span>`;
+        childrenHtml += `\n${indent}  <span class="label-text">${props.Text}</span>`;
       }
 
       childrenKeys.forEach(childName => {
-        childrenHtml += '
-' + renderNodeToHtml(childName, nodeData._children[childName], depth + 1);
+        childrenHtml += `\n` + renderNodeToHtml(childName, nodeData._children[childName], depth + 1);
       });
 
       if (childrenHtml) {
-        return `${indent}<div ${attrStr}>${childrenHtml}
-${indent}</div>`;
+        return `${indent}<div ${attrStr}>${childrenHtml}\n${indent}</div>`;
       } else {
         return `${indent}<div ${attrStr}></div>`;
       }
@@ -267,8 +263,7 @@ ${indent}</div>`;
 
     let innerTreeHtml = '';
     Object.keys(nodesTree).forEach(rootKey => {
-      innerTreeHtml += renderNodeToHtml(rootKey, nodesTree[rootKey], 1) + '
-';
+      innerTreeHtml += renderNodeToHtml(rootKey, nodesTree[rootKey], 1) + '\n';
     });
 
     const generatedTemplate = `<template id="ar-target">
@@ -1005,8 +1000,7 @@ ${innerTreeHtml}    </div>
   }
 
   function exportHTML() {
-    let output = `<template id="ar-target">
-`;
+    let output = `<template id="ar-target">\n`;
 
     editableObjects.forEach(obj => {
       const pos = `${obj.position.x.toFixed(3)},${obj.position.y.toFixed(3)},${obj.position.z.toFixed(3)}`;
@@ -1017,82 +1011,15 @@ ${innerTreeHtml}    </div>
       const scl = `${obj.scale.x.toFixed(3)},${obj.scale.y.toFixed(3)},${obj.scale.z.toFixed(3)}`;
 
       if (obj.userData.type === 'object3d') {
-        output += `  <model
-`;
-        output += `    name="${obj.name}"
-`;
-        output += `    data-src="${obj.userData.src || ''}"
-`;
-        output += `    data-position="${pos}"
-`;
-        output += `    data-rotation="${rot}"
-`;
-        output += `    data-scale="${scl}"
-`;
-        output += `  ></model>
-`;
+        output += `  <model\n    name="${obj.name}"\n    data-src="${obj.userData.src || ''}"\n    data-position="${pos}"\n    data-rotation="${rot}"\n    data-scale="${scl}"\n  ></model>\n`;
       } else if (obj.userData.type === 'panel') {
-        output += `  <panel
-`;
-        output += `    name="${obj.name}"
-`;
-        output += `    data-width="${obj.userData.rawData.width || '0.3'}"
-`;
-        output += `    data-height="${obj.userData.rawData.height || '0.3'}"
-`;
-        output += `    data-position="${pos}"
-`;
-        output += `    data-rotation="${rot}"
-`;
-        output += `    data-scale="${scl}"
-`;
-        output += `  >
-`;
-
-        output += obj.userData.innerHTML || `    <div class="panel"></div>
-`;
-        output += `  </panel>
-`;
+        output += `  <panel\n    name="${obj.name}"\n    data-width="${obj.userData.rawData.width || '0.3'}"\n    data-height="${obj.userData.rawData.height || '0.3'}"\n    data-position="${pos}"\n    data-rotation="${rot}"\n    data-scale="${scl}"\n  >\n`;
+        output += obj.userData.innerHTML || `    <div class="panel"></div>\n`;
+        output += `  </panel>\n`;
       } else if (obj.userData.type === 'video') {
-        output += `  <video
-`;
-        output += `    name="${obj.name}"
-`;
-        output += `    data-src="${obj.userData.src || ''}"
-`;
-        output += `    data-label="${obj.userData.label || ''}"
-`;
-        output += `    data-width="${obj.userData.width}"
-`;
-        output += `    data-height="${obj.userData.height}"
-`;
-        output += `    data-position="${pos}"
-`;
-        output += `    data-rotation="${rot}"
-`;
-        output += `    data-scale="${scl}"
-`;
-        output += `  ></video>
-`;
+        output += `  <video\n    name="${obj.name}"\n    data-src="${obj.userData.src || ''}"\n    data-label="${obj.userData.label || ''}"\n    data-width="${obj.userData.width}"\n    data-height="${obj.userData.height}"\n    data-position="${pos}"\n    data-rotation="${rot}"\n    data-scale="${scl}"\n  ></video>\n`;
       } else if (obj.userData.type === 'html') {
-        output += `  <htmlblock
-`;
-        output += `    name="${obj.name}"
-`;
-        output += `    data-raw-b64="${encodeHtmlB64(obj.userData.html || '')}"
-`;
-        output += `    data-width="${obj.userData.width}"
-`;
-        output += `    data-height="${obj.userData.height}"
-`;
-        output += `    data-position="${pos}"
-`;
-        output += `    data-rotation="${rot}"
-`;
-        output += `    data-scale="${scl}"
-`;
-        output += `  ></htmlblock>
-`;
+        output += `  <htmlblock\n    name="${obj.name}"\n    data-raw-b64="${encodeHtmlB64(obj.userData.html || '')}"\n    data-width="${obj.userData.width}"\n    data-height="${obj.userData.height}"\n    data-position="${pos}"\n    data-rotation="${rot}"\n    data-scale="${scl}"\n  ></htmlblock>\n`;
       }
     });
 
