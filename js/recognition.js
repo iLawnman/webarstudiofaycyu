@@ -1,6 +1,6 @@
 // js/recognition.js
 import * as THREE from 'three';
-import { createArTarget, createArTargetSync } from './artarget.js';
+import { createArTargetSync } from './artarget.js';
 
 export class ImageRecognition {
   constructor(ui) {
@@ -8,8 +8,6 @@ export class ImageRecognition {
     /** @type {Array<{bmp: ImageBitmap, name: string, src: string, source: string}>} */
     this.targetBitmaps = [];
     this.trackedMarkers = new Map();
-    /** индексы, для которых уже идёт async createArTarget */
-    this._pendingCreation = new Set();
     // waitingImage  — ждём распознавания маркера
     // waitingInput  — маркер найден, ждём нажатия OK
     this.state = 'waitingImage';
@@ -275,14 +273,14 @@ export class ImageRecognition {
   _tryHitOk() {
     if (!this._arScene) return;
     const camera = this._arScene.camera;
+    if (!camera) return;
     this._raycaster.setFromCamera(this._pointerNdc, camera);
 
     for (const [, entry] of this.trackedMarkers) {
       if (!entry.arTarget || !entry.arTarget.visible || entry.dismissed) continue;
-      const okPanel = entry.arTarget.userData?.okPanel
-          || entry.arTarget.userData?.okButton
-          || entry.arTarget.userData?.panels?.okPanel
-          || entry.arTarget.userData?.panels?.okButton;
+      const ud = entry.arTarget.userData || {};
+      const okPanel = ud.okPanel || ud.okButton
+          || (ud.panels && (ud.panels.okPanel || ud.panels.okButton));
       if (!okPanel) continue;
       const hits = this._raycaster.intersectObject(okPanel, false);
       if (hits.length > 0) {
@@ -313,38 +311,18 @@ export class ImageRecognition {
     this.ui.setHint('Ожидание маркера… Покажите картинку снова.');
   }
 
-  /**
-   * Создаёт AR-таргет. Сначала пробует async HTML-шаблон,
-   * при ошибке — синхронный canvas-fallback.
-   */
-  async _createTarget(markerName, idx) {
-    try {
-      const arTarget = await createArTarget(markerName, {
-        onOk: () => {
-          const e = this.trackedMarkers.get(idx);
-          if (e) this._handleOk(e);
-        }
-      });
-      return arTarget;
-    } catch (e) {
-      this.ui.log('createArTarget failed, using sync fallback: ' + e.message, 'warn');
-      return createArTargetSync(markerName, {
-        onOk: () => {
-          const e = this.trackedMarkers.get(idx);
-          if (e) this._handleOk(e);
-        }
-      });
-    }
-  }
-
   processTracking(frame, xrRefSpace, frameCount, arScene) {
     try {
-      if (!frame.getImageTrackingResults) return;
+      if (!frame || typeof frame.getImageTrackingResults !== 'function') return;
 
       const results = frame.getImageTrackingResults();
+      if (!results) return;
+
       const seen = new Set();
 
       for (const result of results) {
+        if (!result) continue;
+
         const trackingState = result.trackingState;
         const idx = result.index;
         seen.add(idx);
@@ -354,45 +332,32 @@ export class ImageRecognition {
 
         let entry = this.trackedMarkers.get(idx);
 
-        // уже создаём — ждём, не спамим
-        if (!entry && this._pendingCreation.has(idx)) {
-          continue;
-        }
-
         if (!entry) {
           if (this.state !== 'waitingImage') continue;
 
           const markerName = this.getMarkerName(idx);
-          this._pendingCreation.add(idx);
 
-          // async create — не блокируем frame loop
-          this._createTarget(markerName, idx).then((arTarget) => {
-            this._pendingCreation.delete(idx);
-
-            if (!arTarget || !arTarget.position || !arTarget.quaternion) {
-              this.ui.log('[' + idx + '] createArTarget returned invalid object', 'err');
-              return;
+          // синхронный create — никаких Promise в frame loop
+          const arTarget = createArTargetSync(markerName, {
+            onOk: () => {
+              const e = this.trackedMarkers.get(idx);
+              if (e) this._handleOk(e);
             }
-
-            // маркер мог уже потеряться, пока шли загрузка шаблона
-            if (!this.trackedMarkers.has(idx) && this.state === 'waitingImage') {
-              // ok, ещё актуален
-            }
-
-            arScene.scene.add(arTarget);
-            const newEntry = { arTarget, lastState: trackingState, dismissed: false };
-            this.trackedMarkers.set(idx, newEntry);
-
-            this.state = 'waitingInput';
-            this.ui.log('[' + idx + '] AR Target created: ' + markerName + ' (state=' + trackingState + ')', 'ok');
-            this.ui.log('state → waitingInput', 'info');
-            this.ui.setHint('Картинка ' + markerName + ' найдена! Нажмите OK.');
-          }).catch((e) => {
-            this._pendingCreation.delete(idx);
-            this.ui.log('[' + idx + '] AR Target create failed: ' + e.message, 'err');
           });
 
-          continue; // пока создаётся — позу обновлять некому
+          if (!arTarget || !arTarget.isObject3D) {
+            this.ui.log('[' + idx + '] createArTargetSync returned invalid object', 'err');
+            continue;
+          }
+
+          arScene.scene.add(arTarget);
+          entry = { arTarget, lastState: trackingState, dismissed: false };
+          this.trackedMarkers.set(idx, entry);
+
+          this.state = 'waitingInput';
+          this.ui.log('[' + idx + '] AR Target created: ' + markerName + ' (state=' + trackingState + ')', 'ok');
+          this.ui.log('state → waitingInput', 'info');
+          this.ui.setHint('Картинка ' + markerName + ' найдена! Нажмите OK.');
         }
 
         if (entry.dismissed) {
@@ -400,26 +365,27 @@ export class ImageRecognition {
           continue;
         }
 
-        // аккуратное обновление позы
+        const target = entry.arTarget;
+        if (!target || !target.isObject3D) continue;
+
         const t = pose.transform;
         const pos = t.position;
         const ori = t.orientation;
-        const target = entry.arTarget;
 
-        if (target && target.position && pos &&
-            typeof pos.x === 'number' && typeof pos.y === 'number' && typeof pos.z === 'number') {
+        if (target.position && pos &&
+            Number.isFinite(pos.x) && Number.isFinite(pos.y) && Number.isFinite(pos.z)) {
           target.position.set(pos.x, pos.y, pos.z);
         }
 
-        if (target && target.quaternion && ori &&
-            typeof ori.x === 'number' && typeof ori.y === 'number' &&
-            typeof ori.z === 'number' && typeof ori.w === 'number') {
+        if (target.quaternion && ori &&
+            Number.isFinite(ori.x) && Number.isFinite(ori.y) &&
+            Number.isFinite(ori.z) && Number.isFinite(ori.w)) {
           target.quaternion.set(ori.x, ori.y, ori.z, ori.w);
         }
 
         entry.lastState = trackingState;
 
-        if (target && target.scale) {
+        if (target.scale) {
           target.scale.setScalar(trackingState === 'emulated' ? 0.7 : 1.0);
         }
       }
@@ -434,7 +400,6 @@ export class ImageRecognition {
             this._disposeTarget(entry.arTarget);
           }
           this.trackedMarkers.delete(idx);
-          this._pendingCreation.delete(idx);
 
           if (this.state === 'waitingInput') {
             this.state = 'waitingImage';
@@ -445,7 +410,7 @@ export class ImageRecognition {
       }
     } catch (e) {
       if (frameCount % 60 === 0) {
-        this.ui.log('getImageTrackingResults err: ' + e.message, 'err');
+        this.ui.log('getImageTrackingResults err: ' + (e && e.message ? e.message : String(e)), 'err');
       }
     }
   }
@@ -455,8 +420,15 @@ export class ImageRecognition {
     group.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose();
       if (obj.material) {
-        if (obj.material.map) obj.material.map.dispose();
-        obj.material.dispose();
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach(m => {
+            if (m.map) m.map.dispose();
+            m.dispose();
+          });
+        } else {
+          if (obj.material.map) obj.material.map.dispose();
+          obj.material.dispose();
+        }
       }
     });
   }
