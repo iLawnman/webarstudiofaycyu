@@ -1,4 +1,3 @@
-// js/recognition.js
 import * as THREE from 'three';
 import { createArTargetSync } from './artarget.js';
 import { playSound } from './audio.js';

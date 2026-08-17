@@ -1,4 +1,3 @@
-// js/modelfactory.js
 import * as THREE from 'three';
 
 const DEFAULT_TEMPLATE_URL = '/assets/artarget.html';
