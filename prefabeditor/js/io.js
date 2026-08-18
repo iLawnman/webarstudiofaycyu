@@ -1,9 +1,7 @@
 /** Загрузка / сохранение префабов, иерархия сцены */
 
 import { normalizePath, encodeHtmlB64, decodeHtmlB64, getDataset } from './utils.js';
-import {
-    clearEditableObjects, addEditableObject, editableObjects, selectObject, selectedObject
-} from './scene.js';
+import { clearEditableObjects, addEditableObject, selectObject} from './scene.js';
 import { createObjectMesh, createPanelMesh, createVideoMesh, createHtmlMesh } from './objects.js';
 
 export const localDefaultTemplate = `<template id="ar-target">
