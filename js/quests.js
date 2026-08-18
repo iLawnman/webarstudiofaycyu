@@ -33,10 +33,7 @@ export class QuestManager {
     }
 
     /**
-     * Преобразует двухмерный массив таблицы в Map объектов.
-     * Работает по заголовкам из первой строки — подхватывает ВСЕ колонки
-     * (включая RightReaction/WrongReaction/Artefact/NextWayQuest и т.д.),
-     * ничего не нужно перечислять вручную.
+     * Преобразует двухмерный массив таблицы в Map объектов
      */
     _parseTable(dataArray) {
         if (!dataArray || dataArray.length < 2) return new Map();
@@ -130,7 +127,6 @@ export class QuestManager {
                 validText: (ans.MainTxt_Text || '').trim().toLowerCase()
             }));
         }
-        // Art / AntiArt — вариантов нет, это одиночное подтверждение находки/ненаходки
 
         return {
             questId: quest.id,
@@ -147,20 +143,11 @@ export class QuestManager {
     }
 
     /**
-     * Проверка правильности выбранного или введенного ответа.
-     * userInputValue:
-     *   number  — индекс кнопки/слайда (сравнивается с RightWayIndx)
-     *   string  — текст, введенный в InputField
-     *   boolean — простое подтверждение (Art/AntiArt и другие безальтернативные
-     *             ответы, где нет RightWayIndx) — true всегда считается верным
+     * Проверка правильности выбранного или введенного ответа
      */
     validateAnswer(questId, userInputValue) {
         const quest = this.quests.get(questId);
         if (!quest) return false;
-
-        if (typeof userInputValue === 'boolean') {
-            return userInputValue === true;
-        }
 
         const rightWayIndex = parseInt(quest.RightWayIndx, 10);
         const answerIds = quest.AnswerList ? quest.AnswerList.split(',').map(s => s.trim()) : [];
@@ -177,27 +164,13 @@ export class QuestManager {
             // Ищем совпадения среди ответов
             for (let i = 1; i < answerIds.length; i++) {
                 const ans = this.answers.get(answerIds[i]);
-                if (ans && ans.MainTxt_Text && ans.MainTxt_Text.trim().toLowerCase() === formattedInput) {
+                if (ans && ans.MainTxt_Text.trim().toLowerCase() === formattedInput) {
                     return true;
                 }
             }
         }
 
         return false;
-    }
-
-    /**
-     * Текст реакции (RightReaction / WrongReaction) для resultPanel.
-     * @param {string} questId
-     * @param {boolean} isCorrect
-     * @returns {string}
-     */
-    getReactionText(questId, isCorrect) {
-        const quest = this.quests.get(questId);
-        if (!quest) return isCorrect ? 'Верно!' : 'Неверно.';
-
-        const text = isCorrect ? quest.RightReaction : quest.WrongReaction;
-        return text || (isCorrect ? 'Верно!' : 'Неверно.');
     }
 }
 
