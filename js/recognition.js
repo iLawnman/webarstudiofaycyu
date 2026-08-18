@@ -9,9 +9,8 @@ export class ImageRecognition {
     /** @type {Array<{bmp: ImageBitmap, name: string, src: string, source: string}>} */
     this.targetBitmaps = [];
     this.trackedMarkers = new Map();
-    // waitingImage   — ждём распознавания маркера (показана панель "ИЩИТЕ!")
-    // waitingInput   — маркер найден, открыта questionpanel, ждём ответа пользователя
-    // showingResult  — ответ дан, показана resultpanel
+    // waitingImage  — ждём распознавания маркера
+    // waitingInput  — маркер найден, ждём нажатия OK
     this.state = 'waitingImage';
 
     // Менеджер квестов для сопоставления RecognitionImage -> Quest
@@ -262,43 +261,6 @@ export class ImageRecognition {
     this._boundOnClick = null;
   }
 
-  /**
-   * Показывает панель "ИЩИТЕ!" со случайной картинкой из списка распознаваемых
-   * маркеров. Вызывается когда пол установлен (сессия готова) и когда
-   * пользователь возвращается в режим поиска (маркер потерян / ответ дан).
-   * @param {string} [hintText]
-   */
-  presentSearchPrompt(hintText) {
-    this.state = 'waitingImage';
-    if (!this.targetBitmaps.length) return;
-
-    const pick = this.targetBitmaps[Math.floor(Math.random() * this.targetBitmaps.length)];
-    this.ui.showQuestStart(pick.src, 'ИЩИТЕ!');
-
-    const names = this.targetBitmaps.map(t => t.name).join(', ');
-    this.ui.setHint(hintText || ('Покажите одну из картинок: ' + names));
-  }
-
-  /**
-   * Полный сброс состояния распознавания (используется при завершении AR-сессии):
-   * убирает все AR-цели со сцены, закрывает все overlay-панели.
-   * @param {import('./arscene.js').ARScene} [arScene]
-   */
-  reset(arScene) {
-    for (const [, entry] of this.trackedMarkers) {
-      if (entry.arTarget) {
-        if (arScene) arScene.scene.remove(entry.arTarget);
-        this._disposeTarget(entry.arTarget);
-      }
-    }
-    this.trackedMarkers.clear();
-    this.state = 'waitingImage';
-
-    this.ui.hideQuestStart();
-    this.ui.hideQuestion();
-    this.ui.hideResult();
-  }
-
   _onSelect(ev) {
     if (this.state !== 'waitingInput' || !this._arScene) return;
     this._pointerNdc.set(0, 0);
@@ -351,73 +313,15 @@ export class ImageRecognition {
     }
   }
 
-  /**
-   * Тап по 3D OK-кнопке / по маркеру. Настоящий ответ на вопрос всегда даётся
-   * через 2D questionpanel (см. _openQuestionPanel/_onQuestionAnswered).
-   * Тап по 3D-объекту работает только как ярлык подтверждения для типов
-   * без выбора (Art/AntiArt/без совпадения в quest-таблице) — для Button/
-   * Slide/InputField он игнорируется, чтобы не подменять реальный ответ.
-   */
   _handleOk(entry) {
     if (entry.dismissed) return;
-    const type = entry.questData?.answerType;
-    if (type === 'Art' || type === 'AntiArt' || !type) {
-      this._onQuestionAnswered(entry, true);
-    }
-  }
-
-  /**
-   * Открывает 2D questionpanel с картинкой распознанного маркера и вопросом
-   * из questtable.json, подключает обработчик ответа.
-   */
-  _openQuestionPanel(entry, markerName) {
-    const questData = entry.questData;
-    const bitmapEntry = this.targetBitmaps.find(t => t.name === markerName);
-
-    const data = {
-      imageSrc: bitmapEntry ? bitmapEntry.src : '',
-      question: questData?.question || questData?.title || markerName,
-      mainText: questData?.mainText || '',
-      answerType: questData?.answerType || 'Slide',
-      options: questData?.options || []
-    };
-
-    this.ui.showQuestion(data, (value) => this._onQuestionAnswered(entry, value));
-  }
-
-  /**
-   * Пользователь дал ответ (через questionpanel или через тап-ярлык).
-   * Валидирует ответ, прячет AR-цель и questionpanel, показывает resultPanel
-   * с текстом из RightReaction/WrongReaction.
-   */
-  _onQuestionAnswered(entry, value) {
-    if (entry.dismissed) return;
     entry.dismissed = true;
-
     if (entry.arTarget) {
       entry.arTarget.visible = false;
     }
-    this.ui.hideQuestion();
-
-    const questData = entry.questData;
-    const questId = questData?.questId;
-
-    let isCorrect = true;
-    if (questId && this.questManager.quests.has(questId)) {
-      isCorrect = this.questManager.validateAnswer(questId, value);
-    }
-
-    this.state = 'showingResult';
-    this.ui.log(
-        `[Quest ${questId || '?'}] answer=${JSON.stringify(value)} → ${isCorrect ? 'CORRECT' : 'WRONG'}`,
-        isCorrect ? 'ok' : 'warn'
-    );
-
-    const reactionText = this.questManager.getReactionText(questId, isCorrect);
-
-    this.ui.showResult(isCorrect, reactionText, () => {
-      this.presentSearchPrompt();
-    });
+    this.state = 'waitingImage';
+    this.ui.log('OK → AR Target hidden, state → waitingImage', 'ok');
+    this.ui.setHint('Ожидание маркера… Покажите картинку снова.');
   }
 
   processTracking(frame, xrRefSpace, frameCount, arScene) {
@@ -489,10 +393,10 @@ export class ImageRecognition {
           this.ui.log('[' + idx + '] AR Target created for marker: ' + markerName + ' (state=' + trackingState + ')', 'ok');
           this.ui.log('state → waitingInput', 'info');
 
-          // Картинка найдена: прячем "ИЩИТЕ!", открываем панель вопроса
-          this.ui.hideQuestStart();
-          this._openQuestionPanel(entry, markerName);
-
+          const hintText = questData?.question 
+            ? `Квест (${markerName}): ${questData.question}` 
+            : `Картинка ${markerName} найдена! Нажмите OK.`;
+          this.ui.setHint(hintText);
           playSound("click");
         }
 
@@ -537,12 +441,10 @@ export class ImageRecognition {
           }
           this.trackedMarkers.delete(idx);
 
-          // Если ответ ещё не был дан (маркер потерян до завершения вопроса) —
-          // закрываем questionpanel и возвращаемся к поиску.
-          if (!entry.dismissed) {
-            this.ui.hideQuestion();
-            this.ui.log('state → waitingImage (lost before answer)', 'info');
-            this.presentSearchPrompt('Маркер потерян. Покажите картинку снова.');
+          if (this.state === 'waitingInput') {
+            this.state = 'waitingImage';
+            this.ui.log('state → waitingImage (lost before OK)', 'info');
+            this.ui.setHint('Маркер потерян. Покажите картинку снова.');
           }
         }
       }
