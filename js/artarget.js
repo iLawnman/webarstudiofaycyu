@@ -111,7 +111,7 @@ export class ModelFactory {
 
         const sphere = this._createSphere();
         group.add(sphere);
-
+        
         const questionPanel = this._makeCanvasPanel({
             name: 'questionPanel',
             w: 0.24, h: 0.30,
@@ -145,6 +145,7 @@ export class ModelFactory {
         group.add(questionPanel);
 
         group.position.z = 0.02;
+        group.rotation.set(90, 0, 0);
         group.userData = {
             targetInfo,
             markerName: title,
