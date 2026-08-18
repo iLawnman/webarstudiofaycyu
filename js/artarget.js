@@ -44,19 +44,28 @@ export class ModelFactory {
         const template = await this._loadTemplate(templateUrl);
         const panels = template.querySelectorAll('panel');
 
+        // Генерируем HTML содержимого оверлей-панели для подстановки в шаблон
+        const imageSrc = extraVars.imageSrc || targetInfo.imageSrc || '';
+        const imageHtml = imageSrc ? `<img class="panel-img" src="${imageSrc}" alt="target" />` : '';
+        const questionText = extraVars.question || targetInfo.question || title || '';
+        const bodyHtml = this._buildQuestionBodyHtml(extraVars);
+
         const templateVars = {
             title: title,
             textLabel: targetInfo.textLabel ?? 'MARKER',
             imgLabel: targetInfo.imgLabel ?? 'IMAGE',
             subtitle: targetInfo.subtitle ?? 'AR Target',
             okText: targetInfo.okText ?? 'OK',
-            markerName: title, // Backward compatibility for existing template references
+            markerName: title,
+            imageHtml: imageHtml,
+            question: questionText,
+            bodyHtml: bodyHtml,
             ...extraVars
         };
 
         const userData = {
             targetInfo,
-            markerName: title, // Legacy backward compatibility
+            markerName: title,
             sphere,
             onOk,
             panels: {}
@@ -93,9 +102,7 @@ export class ModelFactory {
             : { title: String(targetData) };
 
         const title = targetInfo.title ?? targetInfo.name ?? String(targetData ?? '');
-        const textLabel = targetInfo.textLabel ?? 'MARKER';
-        const imgLabel = targetInfo.imgLabel ?? 'IMAGE';
-        const subtitle = targetInfo.subtitle ?? 'AR Target';
+        const questionText = options.vars?.question || targetInfo.question || title || 'AR Target';
         const okText = targetInfo.okText ?? 'OK';
         const groupName = targetInfo.id || title || 'target';
 
@@ -105,100 +112,78 @@ export class ModelFactory {
         const sphere = this._createSphere();
         group.add(sphere);
 
-        const textPanel = this._makeCanvasPanel({
-            name: 'textPanel',
-            w: 0.12, h: 0.18,
-            pos: [-0.12, 0, 0.02],
-            rot: [-Math.PI / 2, (20 * Math.PI) / 180, 0],
+        const questionPanel = this._makeCanvasPanel({
+            name: 'questionPanel',
+            w: 0.24, h: 0.30,
+            pos: [0, 0, 0.02],
+            rot: [-Math.PI / 2, 0, 0],
+            canvasW: 380, canvasH: 480,
             draw: (ctx, cw, ch) => {
-                ctx.fillStyle = 'rgba(10, 10, 30, 0.92)';
+                ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
                 ctx.fillRect(0, 0, cw, ch);
                 ctx.strokeStyle = '#00ffaa';
-                ctx.lineWidth = 8;
+                ctx.lineWidth = 6;
                 ctx.strokeRect(4, 4, cw - 8, ch - 8);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 24px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(title, cw / 2, 60);
+
                 ctx.fillStyle = '#00ffaa';
-                ctx.font = 'bold 28px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(textLabel, cw / 2, 60);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 36px sans-serif';
-                ctx.fillText(title, cw / 2, 200);
-                ctx.fillStyle = '#aaaaaa';
                 ctx.font = '20px sans-serif';
-                ctx.fillText(subtitle, cw / 2, 280);
-            }
-        });
-        group.add(textPanel);
+                ctx.fillText(questionText, cw / 2, 140);
 
-        const imgPanel = this._makeCanvasPanel({
-            name: 'imgPanel',
-            w: 0.12, h: 0.18,
-            pos: [0.12, 0, 0.02],
-            rot: [-Math.PI / 2, (-20 * Math.PI) / 180, 0],
-            draw: (ctx, cw, ch) => {
-                const grad = ctx.createLinearGradient(0, 0, 0, ch);
-                grad.addColorStop(0, '#1a0033');
-                grad.addColorStop(1, '#003344');
-                ctx.fillStyle = grad;
-                ctx.fillRect(0, 0, cw, ch);
-                for (let i = 0; i < 12; i++) {
-                    ctx.beginPath();
-                    ctx.arc(40 + Math.random() * 176, 40 + Math.random() * 304, 8 + Math.random() * 24, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${200 + Math.random() * 80}, 70%, 55%, 0.7)`;
-                    ctx.fill();
-                }
-                ctx.strokeStyle = '#ff66cc';
-                ctx.lineWidth = 8;
-                ctx.strokeRect(4, 4, cw - 8, ch - 8);
-                ctx.fillStyle = '#ff66cc';
-                ctx.font = 'bold 22px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(imgLabel, cw / 2, 50);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = '18px sans-serif';
-                ctx.fillText(title, cw / 2, 340);
-            }
-        });
-        group.add(imgPanel);
-
-        const okPanel = this._makeCanvasPanel({
-            name: 'okButton',
-            w: 0.16, h: 0.06,
-            pos: [0, -0.22, 0.02],
-            rot: [-Math.PI / 2, 0, 0],
-            canvasW: 256, canvasH: 96,
-            draw: (ctx, cw, ch) => {
                 ctx.fillStyle = 'rgba(0, 40, 20, 0.95)';
-                ctx.fillRect(0, 0, cw, ch);
-                ctx.fillStyle = '#00cc66';
-                this._roundRectPath(ctx, 24, 16, 208, 64, 12);
-                ctx.fill();
-                ctx.strokeStyle = '#00ff99';
-                ctx.lineWidth = 4;
-                ctx.stroke();
+                ctx.fillRect(cw / 4, ch - 90, cw / 2, 50);
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 40px sans-serif';
-                ctx.textAlign = 'center';
+                ctx.font = 'bold 22px sans-serif';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(okText, cw / 2, ch / 2);
+                ctx.fillText(okText, cw / 2, ch - 65);
             }
         });
-        group.add(okPanel);
+        group.add(questionPanel);
 
         group.position.z = 0.02;
         group.userData = {
             targetInfo,
-            markerName: title, // Legacy backward compatibility
+            markerName: title,
             sphere,
-            textPanel,
-            imgPanel,
-            okPanel,
-            textTexture: textPanel.userData.texture,
-            imgTexture: imgPanel.userData.texture,
-            okTexture: okPanel.userData.texture,
+            questionPanel,
+            questionTexture: questionPanel.userData.texture,
             onOk
         };
         return group;
+    }
+
+    _buildQuestionBodyHtml(vars = {}) {
+        const type = vars.answerType || 'Slide';
+        const options = vars.options || [];
+
+        if (type === 'Button') {
+            const btns = options.map((opt, idx) => 
+                `<div class="quest-btn">${opt.text || `Вариант ${idx + 1}`}</div>`
+            ).join('');
+            return `<div class="quest-options-grid">${btns}</div>`;
+        } else if (type === 'InputField') {
+            const val = vars.inputValue || '';
+            return `
+                <div class="quest-input-block">
+                    <div class="quest-input">${val || 'Введите ответ...'}</div>
+                    <div class="quest-submit-btn">OK</div>
+                </div>`;
+        } else if (type === 'Art' || type === 'AntiArt') {
+            return `<div class="quest-submit-btn quest-ok-btn">OK</div>`;
+        } else {
+            const currentSlideText = options[vars.activeSlideIndex || 0]?.text || vars.mainText || '';
+            return `
+                <div class="quest-slider">
+                    <div class="slide-nav">◄</div>
+                    <div class="slide-content">${currentSlideText}</div>
+                    <div class="slide-nav">►</div>
+                </div>
+                <div class="quest-submit-btn quest-ok-btn" style="margin-top: 10px;">OK</div>`;
+        }
     }
 
     // ─── private: HTML → THREE ─────────────────────────────────────────────────
@@ -217,17 +202,10 @@ export class ModelFactory {
         return template;
     }
 
-    /**
-     * Create a PlaneGeometry mesh from a <panel> element.
-     * data-width / data-height  → geometry size (metres)
-     * data-position="x,y,z"     → position
-     * data-rotation="rx,ry,rz"  → degrees → radians
-     * Inner HTML is rendered to CanvasTexture via SVG foreignObject.
-     */
     async _createPanelFromHtml(panelEl, vars = {}) {
         const name = panelEl.getAttribute('name') || 'panel';
-        const w = parseFloat(panelEl.dataset.width) || 0.12;
-        const h = parseFloat(panelEl.dataset.height) || 0.18;
+        const w = parseFloat(panelEl.dataset.width) || 0.24;
+        const h = parseFloat(panelEl.dataset.height) || 0.30;
         const pos = this._parseVec3(panelEl.dataset.position, [0, 0, 0.02]);
         const rot = this._parseVec3(panelEl.dataset.rotation, [-90, 0, 0]).map(d => d * Math.PI / 180);
 
@@ -263,25 +241,18 @@ export class ModelFactory {
 
     _measurePanelCss(panelEl) {
         const root = panelEl.querySelector('.panel') || panelEl.firstElementChild;
-        if (!root) return { cssW: 256, cssH: 384 };
+        if (!root) return { cssW: 380, cssH: 480 };
 
         const style = root.getAttribute('style') || '';
         const wMatch = style.match(/width:\s*([\d.]+)px/);
         const hMatch = style.match(/height:\s*([\d.]+)px/);
 
-        let cssW = wMatch ? parseFloat(wMatch[1]) : 256;
-        let cssH = hMatch ? parseFloat(hMatch[1]) : 384;
+        let cssW = wMatch ? parseFloat(wMatch[1]) : 380;
+        let cssH = hMatch ? parseFloat(hMatch[1]) : 480;
 
-        if (root.classList.contains('ok-panel')) {
-            cssW = 256;
-            cssH = 96;
-        }
         return { cssW, cssH };
     }
 
-    /**
-     * Render arbitrary HTML + CSS into a CanvasTexture (SVG foreignObject).
-     */
     _htmlToTexture(html, width, height, cssText = '') {
         return new Promise((resolve, reject) => {
             const svg = `
@@ -338,7 +309,7 @@ export class ModelFactory {
         return parts.length === 3 && parts.every(Number.isFinite) ? parts : fallback.slice();
     }
 
-    _makeCanvasPanel({ name, w, h, pos, rotX, rot = [rotX ?? -Math.PI / 2, 0, 0], canvasW = 256, canvasH = 384, draw }) {
+    _makeCanvasPanel({ name, w, h, pos, rotX, rot = [rotX ?? -Math.PI / 2, 0, 0], canvasW = 380, canvasH = 480, draw }) {
         const canvas = document.createElement('canvas');
         canvas.width = canvasW;
         canvas.height = canvasH;
@@ -359,40 +330,14 @@ export class ModelFactory {
         mesh.userData.texture = tex;
         return mesh;
     }
-
-    _roundRectPath(ctx, x, y, w, h, r) {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath();
-    }
 }
-
-// ─── backward-compatible free functions (no regression) ───────────────────────
 
 const defaultFactory = new ModelFactory();
 
-/**
- * @param {string|object} [targetData]
- * @param {object} [options]
- * @returns {Promise<THREE.Group>}
- */
 export async function createArTarget(targetData, options = {}) {
     return defaultFactory.createArTarget(targetData, options);
 }
 
-/**
- * @param {string|object} [targetData]
- * @param {object} [options]
- * @returns {THREE.Group}
- */
 export function createArTargetSync(targetData, options = {}) {
     return defaultFactory.createArTargetSync(targetData, options);
 }
