@@ -1,110 +1,124 @@
-/** Загрузка и разбор JSON-дизайна в префаб */
+/** 3D-сцена: инициализация, камера, контролы, выбор объектов */
 
-import { normalizePath, escapeAttr } from './utils.js';
-import { DESIGN_PROP_KEYS, serializePropPanelDiv } from './panels.js';
+export let scene, camera, renderer, orbitControls, transformControls;
+export let selectedObject = null;
+export const editableObjects = [];
 
-let lastJsonDesign = null;
+let onSelectCallback = null;
+let onDeselectCallback = null;
+let onTransformChangeCallback = null;
 
-export function handleJsonDesignSelect(event, onBuilt) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const data = JSON.parse(e.target.result);
-            buildDesignFromJson(data, undefined, onBuilt);
-        } catch (err) {
-            alert('Ошибка при чтении JSON: ' + err.message);
-        }
-    };
-    reader.readAsText(file);
+export function setSceneCallbacks({ onSelect, onDeselect, onTransformChange }) {
+    onSelectCallback = onSelect;
+    onDeselectCallback = onDeselect;
+    onTransformChangeCallback = onTransformChange;
 }
 
-export function handleJsonRowChange(event, onBuilt) {
-    const rowIndex = parseInt(event.target.value, 10);
-    if (lastJsonDesign) buildDesignFromJson(lastJsonDesign, rowIndex, onBuilt);
+export function init3D() {
+    const container = document.getElementById('viewport');
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b1120);
+
+    camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.01, 100);
+    camera.position.set(0, 0.3, 0.5);
+
+    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    const grid = new THREE.GridHelper(1, 20, 0x1e293b, 0x111827);
+    scene.add(grid);
+
+    orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    transformControls = new THREE.TransformControls(camera, renderer.domElement);
+    transformControls.size = 0.75;
+    transformControls.addEventListener('dragging-changed', (event) => {
+        orbitControls.enabled = !event.value;
+    });
+    transformControls.addEventListener('change', () => {
+        if (onTransformChangeCallback) onTransformChangeCallback();
+    });
+    scene.add(transformControls);
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+        if (transformControls.dragging) return;
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(editableObjects, true);
+
+        if (intersects.length > 0) {
+            const root = resolveEditableRoot(intersects[0].object);
+            if (root) selectObject(root);
+        }
+    });
+
+    window.addEventListener('resize', onWindowResize);
+    animate();
 }
 
-export function buildDesignFromJson(jsonData, rowIndex, onBuilt) {
-    if (!Array.isArray(jsonData) || jsonData.length < 2) {
-        alert('Неверный формат JSON-дизайна.');
-        return;
+function resolveEditableRoot(obj) {
+    let cur = obj;
+    while (cur) {
+        if (editableObjects.includes(cur)) return cur;
+        cur = cur.parent;
     }
+    return null;
+}
 
-    lastJsonDesign = jsonData;
+function animate() {
+    requestAnimationFrame(animate);
+    orbitControls.update();
+    renderer.render(scene, camera);
+}
 
-    const headers = jsonData[0];
-    const dataRows = jsonData.slice(1);
-    const idx = Number.isInteger(rowIndex) ? rowIndex : 0;
-    const values = dataRows[idx] || dataRows[0];
+function onWindowResize() {
+    const container = document.getElementById('viewport');
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+}
 
-    const selectorEl = document.getElementById('json-row-selector');
-    if (selectorEl) {
-        if (dataRows.length > 1) {
-            selectorEl.style.display = '';
-            selectorEl.innerHTML = dataRows.map((row, i) => {
-                const label = row[0] || row[1] || ('Вариант ' + (i + 1));
-                return `<option value="${i}" ${i === idx ? 'selected' : ''}>${label}</option>`;
-            }).join('');
-        } else {
-            selectorEl.style.display = 'none';
-        }
-    }
+export function selectObject(obj) {
+    selectedObject = obj;
+    transformControls.attach(obj);
+    if (onSelectCallback) onSelectCallback(obj);
+}
 
-    const panelsMap = {};
-    const order = [];
+export function deselectObject() {
+    selectedObject = null;
+    transformControls.detach();
+    if (onDeselectCallback) onDeselectCallback();
+}
 
-    headers.forEach((header, index) => {
-        const val = values[index];
-        if (val === undefined || val === null || val === '') return;
-        if (header === 'id' || header === 'name' || header === 'Res_Check') return;
+export function clearEditableObjects() {
+    editableObjects.forEach(obj => scene.remove(obj));
+    editableObjects.length = 0;
+    deselectObject();
+}
 
-        const separatorIndex = header.lastIndexOf('_');
-        if (separatorIndex === -1) return;
+export function addEditableObject(mesh) {
+    scene.add(mesh);
+    editableObjects.push(mesh);
+}
 
-        const panelName = header.substring(0, separatorIndex);
-        const propType = header.substring(separatorIndex + 1).toLowerCase();
-        if (!DESIGN_PROP_KEYS.includes(propType)) return;
-
-        if (!panelsMap[panelName]) {
-            panelsMap[panelName] = { group: panelName };
-            order.push(panelName);
-        }
-
-        let processedVal = val;
-        if (['image', 'prefab'].includes(propType) || String(val).match(/\.(png|jpg|jpeg|obj|fbx|prefab)$/i)) {
-            processedVal = normalizePath(String(val));
-        }
-
-        panelsMap[panelName][propType] = processedVal;
-    });
-
-    if (order.length === 0) {
-        alert('В JSON не найдено ни одной группы панелей (проверьте формат ключей "Имя_Свойство").');
-        return;
-    }
-
-    const cols = Math.max(1, Math.ceil(Math.sqrt(order.length)));
-    const rows = Math.ceil(order.length / cols);
-    const spacingX = 0.34;
-    const spacingY = 0.22;
-    const panelW = 0.3;
-    const panelH = 0.18;
-
-    let panelsHtml = '';
-    order.forEach((panelName, i) => {
-        const props = panelsMap[panelName];
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = (col - (cols - 1) / 2) * spacingX;
-        const y = ((rows - 1) / 2 - row) * spacingY;
-
-        panelsHtml += `  <panel name="${escapeAttr(panelName)}" data-width="${panelW}" data-height="${panelH}" data-position="${x.toFixed(3)},${y.toFixed(3)},0" data-rotation="0,0,0">\n`;
-        panelsHtml += `    ${serializePropPanelDiv(props)}\n`;
-        panelsHtml += `  </panel>\n`;
-    });
-
-    const generatedTemplate = `<template id="ar-target">\n${panelsHtml}</template>`;
-    if (onBuilt) onBuilt(generatedTemplate);
+export function removeEditableObject(obj) {
+    const index = editableObjects.indexOf(obj);
+    if (index > -1) editableObjects.splice(index, 1);
+    scene.remove(obj);
 }
