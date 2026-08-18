@@ -200,8 +200,8 @@ export class ImageRecognition {
       // this.ui.setPreview(this.targetBitmaps[0].src);
     }
 
-    const names = this.targetBitmaps.map(t => t.name).join(', ');
-    this.ui.setHint('Нажмите «Start AR». Камера на 1.6 м. Покажите: ' + names);
+    // const names = this.targetBitmaps.map(t => t.name).join(', ');
+    // this.ui.setHint('Нажмите «Start AR». Камера на 1.6 м. Покажите: ' + names);
     this.ui.enableArButton();
     this.ui.log('state → waitingImage | markers: ' + names, 'info');
   }
