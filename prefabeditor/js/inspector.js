@@ -1,6 +1,6 @@
 /** Инспектор свойств объекта */
 
-import { selectedObject, selectObject, deselectObject, removeEditableObject, addEditableObject } from './scene.js';
+import { getSelectedObject, deselectObject, removeEditableObject, addEditableObject} from './scene.js';
 import { normalizePath } from './utils.js';
 import {
     createObjectMesh, createPanelMesh, createVideoMesh, createHtmlMesh,
@@ -332,7 +332,7 @@ export function addObject3D() {
         rotation: '0,0,0'
     });
     addEditableObject(object);
-    selectObject(object);
+    getSelectedObject(object);
 }
 
 export function addVideoObject3D() {
@@ -342,7 +342,7 @@ export function addVideoObject3D() {
         position: '0,0,0', rotation: '0,0,0'
     });
     addEditableObject(video);
-    selectObject(video);
+    getSelectedObject(video);
 }
 
 export function addHtmlObject3D() {
@@ -352,7 +352,7 @@ export function addHtmlObject3D() {
         position: '0,0,0', rotation: '0,0,0'
     }, '<div style="color:#fff;padding:8px;">Custom HTML</div>');
     addEditableObject(htmlObj);
-    selectObject(htmlObj);
+    getSelectedObject(htmlObj);
 }
 
 export function addPanel() {
@@ -367,7 +367,7 @@ export function addPanel() {
         '<div class="panel"><div class="label">New Panel</div></div>'
     );
     addEditableObject(panel);
-    selectObject(panel);
+    getSelectedObject(panel);
 }
 
 export function deleteSelectedObject() {

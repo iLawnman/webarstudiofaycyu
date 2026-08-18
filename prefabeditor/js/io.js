@@ -1,7 +1,10 @@
 /** Загрузка / сохранение префабов, иерархия сцены */
 
 import { normalizePath, encodeHtmlB64, decodeHtmlB64, getDataset } from './utils.js';
-import { clearEditableObjects, addEditableObject, selectObject} from './scene.js';
+import {
+    clearEditableObjects, addEditableObject, selectObject,
+    getEditableObjects, getSelectedObject
+} from './scene.js';
 import { createObjectMesh, createPanelMesh, createVideoMesh, createHtmlMesh } from './objects.js';
 
 export const localDefaultTemplate = `<template id="ar-target">
@@ -64,9 +67,9 @@ export function updateHierarchyTree() {
     const treeContainer = document.getElementById('tree');
     treeContainer.innerHTML = '';
 
-    editableObjects.forEach(obj => {
+    getEditableObjects().forEach(obj => {
         const div = document.createElement('div');
-        div.className = 'tree-item' + (selectedObject === obj ? ' active' : '');
+        div.className = 'tree-item' + (getSelectedObject() === obj ? ' active' : '');
         div.innerHTML = `<span>${obj.name}</span><span>${obj.userData.type}</span>`;
         div.onclick = () => selectObject(obj);
         treeContainer.appendChild(div);
@@ -76,7 +79,7 @@ export function updateHierarchyTree() {
 export function exportHTML() {
     let output = `<template id="ar-target">\n`;
 
-    editableObjects.forEach(obj => {
+    getEditableObjects().forEach(obj => {
         const pos = `${obj.position.x.toFixed(3)},${obj.position.y.toFixed(3)},${obj.position.z.toFixed(3)}`;
         const rotDegX = THREE.MathUtils.radToDeg(obj.rotation.x);
         const rotDegY = THREE.MathUtils.radToDeg(obj.rotation.y);

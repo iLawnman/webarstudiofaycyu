@@ -122,3 +122,11 @@ export function removeEditableObject(obj) {
     if (index > -1) editableObjects.splice(index, 1);
     scene.remove(obj);
 }
+
+export function getEditableObjects() {
+    return editableObjects;
+}
+
+export function getSelectedObject() {
+    return selectedObject;
+}
