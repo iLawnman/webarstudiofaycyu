@@ -199,7 +199,7 @@ export class ImageRecognition {
     } else {
       // this.ui.setPreview(this.targetBitmaps[0].src);
     }
-
+    Инициализация
     // const names = this.targetBitmaps.map(t => t.name).join(', ');
     // this.ui.setHint('Нажмите «Start AR». Камера на 1.6 м. Покажите: ' + names);
     this.ui.enableArButton();
