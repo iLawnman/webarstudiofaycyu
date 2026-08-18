@@ -43,11 +43,23 @@
       display: flex;
       flex-direction: column;
       z-index: 10;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .section {
       padding: 16px 18px;
       border-bottom: 1px solid var(--border);
+    }
+
+    .section.hierarchy {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border-bottom: none;
+      padding-bottom: 0;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .section h3 {
@@ -142,6 +154,7 @@
 
     #tree {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 8px;
       background: rgba(11, 17, 32, .5);
@@ -284,7 +297,7 @@
     <button onclick="addHtmlObject3D()">+ Other HTML</button>
   </div>
 
-  <div class="section" style="flex: 1; display: flex; flex-direction: column; border-bottom: none; padding-bottom: 0;">
+  <div class="section hierarchy">
     <h3>Иерархия сцены</h3>
     <div id="tree"></div>
   </div>
@@ -815,7 +828,14 @@
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = data.name || 'panel_' + Date.now().toString().slice(-4);
-    mesh.userData = { type: 'panel', rawData: data, panelData: panelData, innerHTML: innerHTML };
+    mesh.userData = {
+      type: 'panel',
+      rawData: data,
+      panelData: panelData,
+      innerHTML: innerHTML,
+      width,
+      height
+    };
 
     applyTransformData(mesh, data);
     return mesh;
@@ -915,7 +935,7 @@
     if (subMatch) panelData.elements.push({ type: 'text', text: subMatch[1], y: 250, fontSize: 20, color: '#aaa' });
 
     const btnMatch = html.match(/class="btn">([^<]+)</);
-    if (btnMatch) panelData.elements.push({ type: 'button', text: btnMatch[1], y: 48, fontSize: 32, btnBg: '#00cc66' });
+    if (btnMatch) panelData.elements.push({ type: 'button', text: btnMatch[1], y: 480, fontSize: 32, btnBg: '#00cc66' });
 
     const videoMatch = html.match(/<video[^>]*data-src="([^"]*)"[^>]*data-y="([^"]*)"[^>]*>/);
     if (videoMatch) {
@@ -1083,9 +1103,23 @@
         </div>
       `;
 
-    if (obj.userData.type === 'panel' && obj.userData.panelData && obj.userData.panelData.props) {
-      const props = obj.userData.panelData.props;
+    if (obj.userData.type === 'panel') {
+      const w = obj.userData.width != null ? obj.userData.width : (parseFloat(obj.userData.rawData && obj.userData.rawData.width) || 0.3);
+      const h = obj.userData.height != null ? obj.userData.height : (parseFloat(obj.userData.rawData && obj.userData.rawData.height) || 0.3);
       html += `
+          <hr style="border-color:#3c3c3c; margin: 12px 0;">
+          <div class="prop-group">
+            <h3>Размер панели</h3>
+            <div class="row">
+              <div><label>Ширина (м)</label><input type="number" step="0.01" min="0.01" value="${w}" onchange="updateObjectProp('width', this.value)"></div>
+              <div><label>Высота (м)</label><input type="number" step="0.01" min="0.01" value="${h}" onchange="updateObjectProp('height', this.value)"></div>
+            </div>
+          </div>
+        `;
+
+      if (obj.userData.panelData && obj.userData.panelData.props) {
+        const props = obj.userData.panelData.props;
+        html += `
           <hr style="border-color:#3c3c3c; margin: 12px 0;">
           <div class="prop-group">
             <h3>Группа из JSON-дизайна: ${props.group || ''}</h3>
@@ -1105,8 +1139,8 @@
             <input type="text" value="${props.prefab || ''}" onchange="updateDesignPanelProp('prefab', this.value)">
           </div>
         `;
-    } else if (obj.userData.type === 'panel') {
-      html += `
+      } else {
+        html += `
           <hr style="border-color:#3c3c3c; margin: 12px 0;">
           <div class="prop-group">
             <h3>UI Компоненты Панели</h3>
@@ -1116,6 +1150,7 @@
           </div>
           <div id="ui-elements-list"></div>
         `;
+      }
     }
 
     if (obj.userData.type === 'video') {
@@ -1324,6 +1359,14 @@
         selectedObject.userData.html = value;
         refreshHtmlTexture(selectedObject);
       }
+    } else if (type === 'panel') {
+      if (key === 'width' || key === 'height') {
+        const num = parseFloat(value) || 0.01;
+        selectedObject.userData[key] = num;
+        if (!selectedObject.userData.rawData) selectedObject.userData.rawData = {};
+        selectedObject.userData.rawData[key] = String(num);
+        rebuildPlaneGeometry(selectedObject);
+      }
     } else if (type === 'object3d') {
       if (key === 'src') {
         selectedObject.userData.src = normalizePath(value);
@@ -1413,7 +1456,9 @@
       if (obj.userData.type === 'object3d') {
         output += `  <model\n    name="${obj.name}"\n    data-src="${normalizePath(obj.userData.src || '')}"\n    data-position="${pos}"\n    data-rotation="${rot}"\n    data-scale="${scl}"\n  ></model>\n`;
       } else if (obj.userData.type === 'panel') {
-        output += `  <panel\n    name="${obj.name}"\n    data-width="${obj.userData.rawData.width || '0.3'}"\n    data-height="${obj.userData.rawData.height || '0.3'}"\n    data-position="${pos}"\n    data-rotation="${rot}"\n    data-scale="${scl}"\n  >\n`;
+        const pw = obj.userData.width != null ? obj.userData.width : (obj.userData.rawData && obj.userData.rawData.width) || '0.3';
+        const ph = obj.userData.height != null ? obj.userData.height : (obj.userData.rawData && obj.userData.rawData.height) || '0.3';
+        output += `  <panel\n    name="${obj.name}"\n    data-width="${pw}"\n    data-height="${ph}"\n    data-position="${pos}"\n    data-rotation="${rot}"\n    data-scale="${scl}"\n  >\n`;
         output += obj.userData.innerHTML || `    <div class="panel"></div>\n`;
         output += `  </panel>\n`;
       } else if (obj.userData.type === 'video') {
