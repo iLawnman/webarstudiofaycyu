@@ -20,8 +20,12 @@ export class App {
 
   async init() {
     this.ui.log('App init (WebGL / Three.js WebXR)...', 'info');
+
+    // Штора активна с самого старта, пока идёт инициализация
+    this.ui.showCurtain();
+
     await this.recognition.init();
-    
+
     this.ui.onStartAR(() => this.startAR());
     this.ui.onEndAR(() => this.endAR());
 
@@ -87,23 +91,30 @@ export class App {
 
     await this.arScene.renderer.xr.setSession(this.xrSession);
     this.ui.log('Renderer session set (WebGL + local-floor)', 'ok');
-    
+
     // Показываем кнопку End AR после успешного старта сессии
     this.ui.showEndArButton();
     this.imageTrackingEnabled = true;
 
     this.recognition.attachInput(this.xrSession, this.arScene);
 
+    // Пол установлен (сессия готова) → штора уезжает вверх,
+    // сверху выезжает панель "ИЩИТЕ!" со случайным маркером
+    this.ui.hideCurtain();
+    this.recognition.presentSearchPrompt();
+
     this.xrSession.addEventListener('end', () => {
       this.ui.log('Session ended', 'warn');
       this.imageTrackingEnabled = false;
       this.recognition.detachInput();
+      this.recognition.reset(this.arScene);
       this.xrSession = null;
       this.frameCount = 0;
-      
+
       // Возвращаем UI в первоначальное состояние
       this.ui.hideEndArButton();
       this.ui.enableArButton();
+      this.ui.showCurtain();
     });
   }
 
