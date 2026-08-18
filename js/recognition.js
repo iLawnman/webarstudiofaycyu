@@ -195,9 +195,9 @@ export class ImageRecognition {
       ctx.fillRect(0, 0, 128, 128);
       ctx.fillStyle = '#ff0055';
       ctx.fillRect(32, 32, 64, 64);
-      this.ui.setPreview(c.toDataURL());
+      // this.ui.setPreview(c.toDataURL());
     } else {
-      this.ui.setPreview(this.targetBitmaps[0].src);
+      // this.ui.setPreview(this.targetBitmaps[0].src);
     }
 
     const names = this.targetBitmaps.map(t => t.name).join(', ');
@@ -275,8 +275,8 @@ export class ImageRecognition {
     const pick = this.targetBitmaps[Math.floor(Math.random() * this.targetBitmaps.length)];
     this.ui.showQuestStart(pick.src, 'ИЩИТЕ!');
 
-    const names = this.targetBitmaps.map(t => t.name).join(', ');
-    this.ui.setHint(hintText || ('Покажите одну из картинок: ' + names));
+    // const names = this.targetBitmaps.map(t => t.name).join(', ');
+    // this.ui.setHint(hintText || ('Покажите одну из картинок: ' + names));
   }
 
   /**
