@@ -200,8 +200,7 @@ export class ImageRecognition {
       // this.ui.setPreview(this.targetBitmaps[0].src);
     }
 
-    // const names = this.targetBitmaps.map(t => t.name).join(', ');
-    // this.ui.setHint('Нажмите «Start AR». Камера на 1.6 м. Покажите: ' + names);
+    const names = this.targetBitmaps.map(t => t.name).join(', ');
     this.ui.enableArButton();
     this.ui.log('state → waitingImage | markers: ' + names, 'info');
   }
@@ -409,8 +408,8 @@ export class ImageRecognition {
 
     this.state = 'showingResult';
     this.ui.log(
-      `[Quest ${questId || '?'}] answer=${JSON.stringify(value)} → ${isCorrect ? 'CORRECT' : 'WRONG'}`,
-      isCorrect ? 'ok' : 'warn'
+        `[Quest ${questId || '?'}] answer=${JSON.stringify(value)} → ${isCorrect ? 'CORRECT' : 'WRONG'}`,
+        isCorrect ? 'ok' : 'warn'
     );
 
     const reactionText = this.questManager.getReactionText(questId, isCorrect);
