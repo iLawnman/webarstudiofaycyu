@@ -1,13 +1,13 @@
 /** Инспектор свойств объекта */
 
-import { getSelectedObject, deselectObject, removeEditableObject, addEditableObject} from './scene.js';
+import { selectedObject, deselectObject, removeEditableObject, addEditableObject } from './scene.js';
 import { normalizePath } from './utils.js';
 import {
     createObjectMesh, createPanelMesh, createVideoMesh, createHtmlMesh,
     rebuildPlaneGeometry, reloadObjectModel,
     refreshVideoTexture, refreshHtmlTexture
 } from './objects.js';
-import { buildPropPanelVisual, serializePropPanelDiv, refreshPanelTexture } from './panels.js';
+import { buildPropPanelVisual, serializePropPanelDiv, refreshPanelDOM, applyPanelCustomCSS } from './panels.js';
 import { updateHierarchyTree } from './io.js';
 
 export function renderInspector() {
@@ -55,6 +55,7 @@ export function renderInspector() {
     if (obj.userData.type === 'panel') {
         const w = obj.userData.width != null ? obj.userData.width : (parseFloat(obj.userData.rawData && obj.userData.rawData.width) || 0.3);
         const h = obj.userData.height != null ? obj.userData.height : (parseFloat(obj.userData.rawData && obj.userData.rawData.height) || 0.3);
+        const cssVal = (obj.userData.customCSS || '').replace(/</g, '&lt;');
         html += `
         <hr style="border-color:#3c3c3c; margin: 12px 0;">
         <div class="prop-group">
@@ -63,6 +64,14 @@ export function renderInspector() {
             <div><label>Ширина (м)</label><input type="number" step="0.01" min="0.01" value="${w}" onchange="window.__editor.updateObjectProp('width', this.value)"></div>
             <div><label>Высота (м)</label><input type="number" step="0.01" min="0.01" value="${h}" onchange="window.__editor.updateObjectProp('height', this.value)"></div>
           </div>
+        </div>
+        <div class="prop-group">
+          <h3>CSS панели</h3>
+          <p style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.4;">
+            Стили применяются к панели в сцене. Свойства без селектора или правила с <code>:scope</code>.
+          </p>
+          <textarea id="panel-custom-css" rows="8" style="width:100%; background:#0f172a; border:1px solid #334155; color:#e2e8f0; font-family:ui-monospace,monospace; font-size:11px; margin-bottom:6px; border-radius:6px; padding:8px; line-height:1.4; pointer-events:auto;" placeholder="background: #1e293b;&#10;border: 2px solid #6366f1;&#10;&#10;:scope .label { color: gold; }" oninput="window.__editor.updatePanelCSS(this.value)">${cssVal}</textarea>
+          <button type="button" onclick="window.__editor.updatePanelCSS(document.getElementById('panel-custom-css').value)" style="width:100%;">Применить CSS</button>
         </div>
       `;
 
@@ -96,6 +105,8 @@ export function renderInspector() {
           <button onclick="window.__editor.addUIElement('text')" style="margin-top:6px;">+ Текст</button>
           <button onclick="window.__editor.addUIElement('button')">+ Кнопка</button>
           <button onclick="window.__editor.addUIElement('input')">+ Поле ввода</button>
+          <button onclick="window.__editor.addUIElement('image')">+ Image</button>
+          <button onclick="window.__editor.addUIElement('video')">+ Video</button>
         </div>
         <div id="ui-elements-list"></div>
       `;
@@ -123,7 +134,7 @@ export function renderInspector() {
         <hr style="border-color:#3c3c3c; margin: 12px 0;">
         <div class="prop-group">
           <label>HTML содержимое</label>
-          <textarea rows="4" style="width:100%; background:#3c3c3c; border:1px solid #555; color:#fff; font-size:11px; margin-bottom:8px; border-radius:2px; padding:4px 6px;" onchange="window.__editor.updateObjectProp('html', this.value)">${obj.userData.html || ''}</textarea>
+          <textarea rows="4" style="width:100%; background:#3c3c3c; border:1px solid #555; color:#fff; font-size:11px; margin-bottom:8px; border-radius:2px; padding:4px 6px;" onchange="window.__editor.updateObjectProp('html', this.value)">${(obj.userData.html || '').replace(/</g, '&lt;')}</textarea>
           <div class="row">
             <div><label>Ширина (м)</label><input type="number" step="0.01" value="${obj.userData.width}" onchange="window.__editor.updateObjectProp('width', this.value)"></div>
             <div><label>Высота (м)</label><input type="number" step="0.01" value="${obj.userData.height}" onchange="window.__editor.updateObjectProp('height', this.value)"></div>
@@ -172,7 +183,32 @@ export function updateObjTransform(type, axis, value) {
 
 export function updateInspectorFromTransform() {
     if (!selectedObject) return;
-    renderInspector();
+    // Не пересобираем весь инспектор — иначе сбрасывается textarea CSS
+    const obj = selectedObject;
+    const container = document.getElementById('inspector-content');
+    if (!container) return;
+    const inputs = container.querySelectorAll('.prop-group input[type="number"]');
+    // Обновляем только transform-поля по порядку: pos x/y/z, rot x/y/z, scale x/y/z
+    const vals = [
+        obj.position.x, obj.position.y, obj.position.z,
+        THREE.MathUtils.radToDeg(obj.rotation.x),
+        THREE.MathUtils.radToDeg(obj.rotation.y),
+        THREE.MathUtils.radToDeg(obj.rotation.z),
+        obj.scale.x, obj.scale.y, obj.scale.z
+    ];
+    const transforms = container.querySelectorAll('.prop-group');
+    // Первые 3 prop-group после имени: pos, rot, scale (у каждого по 3 input)
+    let idx = 0;
+    for (let g = 1; g <= 3 && g < transforms.length; g++) {
+        const nums = transforms[g].querySelectorAll('input[type="number"]');
+        nums.forEach(inp => {
+            if (idx < vals.length && document.activeElement !== inp) {
+                const v = vals[idx];
+                inp.value = (g === 2) ? Number(v).toFixed(1) : Number(v).toFixed(3);
+            }
+            idx++;
+        });
+    }
 }
 
 function renderUIElementsList() {
@@ -191,11 +227,15 @@ function renderUIElementsList() {
             <input type="text" value="${el.src || ''}" onchange="window.__editor.updateUIElement(${index}, 'src', this.value)">
             <label>Подпись</label>
             <input type="text" value="${el.label || ''}" onchange="window.__editor.updateUIElement(${index}, 'label', this.value)">
-            <div class="row">
-              <div><label>Y Pos</label><input type="number" value="${el.y || 0}" onchange="window.__editor.updateUIElement(${index}, 'y', this.value)"></div>
-              <div><label>Ширина</label><input type="number" value="${el.width || 200}" onchange="window.__editor.updateUIElement(${index}, 'width', this.value)"></div>
-              <div><label>Высота</label><input type="number" value="${el.height || 120}" onchange="window.__editor.updateUIElement(${index}, 'height', this.value)"></div>
-            </div>
+            <button class="btn-danger" style="font-size:11px; padding:4px 8px;" onclick="window.__editor.removeUIElement(${index})">Удалить</button>
+          </div>
+        `;
+        } else if (el.type === 'image') {
+            html += `
+          <div style="background:rgba(15,23,42,.8); padding:10px; margin-bottom:8px; border-radius:8px; border:1px solid var(--border);">
+            <label>Тип: image</label>
+            <label>Источник</label>
+            <input type="text" value="${el.src || ''}" onchange="window.__editor.updateUIElement(${index}, 'src', this.value)">
             <button class="btn-danger" style="font-size:11px; padding:4px 8px;" onclick="window.__editor.removeUIElement(${index})">Удалить</button>
           </div>
         `;
@@ -203,12 +243,7 @@ function renderUIElementsList() {
             html += `
           <div style="background:rgba(15,23,42,.8); padding:10px; margin-bottom:8px; border-radius:8px; border:1px solid var(--border);">
             <label>Тип: other html</label>
-            <textarea rows="4" style="width:100%; background:#3c3c3c; border:1px solid #555; color:#fff; font-size:11px; margin-bottom:8px; border-radius:2px; padding:4px 6px;" onchange="window.__editor.updateUIElement(${index}, 'html', this.value)">${el.html || ''}</textarea>
-            <div class="row">
-              <div><label>Y Pos</label><input type="number" value="${el.y || 0}" onchange="window.__editor.updateUIElement(${index}, 'y', this.value)"></div>
-              <div><label>Ширина</label><input type="number" value="${el.width || 220}" onchange="window.__editor.updateUIElement(${index}, 'width', this.value)"></div>
-              <div><label>Высота</label><input type="number" value="${el.height || 150}" onchange="window.__editor.updateUIElement(${index}, 'height', this.value)"></div>
-            </div>
+            <textarea rows="3" style="width:100%; background:#3c3c3c; border:1px solid #555; color:#fff; font-size:11px; margin-bottom:8px; border-radius:2px; padding:4px 6px;" onchange="window.__editor.updateUIElement(${index}, 'html', this.value)">${(el.html || '').replace(/</g, '&lt;')}</textarea>
             <button class="btn-danger" style="font-size:11px; padding:4px 8px;" onclick="window.__editor.removeUIElement(${index})">Удалить</button>
           </div>
         `;
@@ -218,8 +253,7 @@ function renderUIElementsList() {
             <label>Тип: ${el.type}</label>
             <input type="text" value="${el.text || ''}" onchange="window.__editor.updateUIElement(${index}, 'text', this.value)">
             <div class="row">
-              <div><label>Y Pos</label><input type="number" value="${el.y || 0}" onchange="window.__editor.updateUIElement(${index}, 'y', this.value)"></div>
-              <div><label>Размер</label><input type="number" value="${el.fontSize || 20}" onchange="window.__editor.updateUIElement(${index}, 'fontSize', this.value)"></div>
+              <div><label>Размер</label><input type="number" value="${el.fontSize || 16}" onchange="window.__editor.updateUIElement(${index}, 'fontSize', this.value)"></div>
             </div>
             <button class="btn-danger" style="font-size:11px; padding:4px 8px;" onclick="window.__editor.removeUIElement(${index})">Удалить</button>
           </div>
@@ -233,13 +267,14 @@ export function addUIElement(type) {
     if (!selectedObject || !selectedObject.userData.panelData) return;
     const elements = selectedObject.userData.panelData.elements;
 
-    if (type === 'text') elements.push({ type: 'text', text: 'Новый текст', y: 100, fontSize: 24, color: '#ffffff' });
-    if (type === 'button') elements.push({ type: 'button', text: 'Кнопка', y: 200, fontSize: 28, btnBg: '#00cc66' });
-    if (type === 'input') elements.push({ type: 'input', text: 'Введите текст...', y: 280, fontSize: 20 });
-    if (type === 'video') elements.push({ type: 'video', src: '', label: 'Video', y: 150, width: 200, height: 120 });
-    if (type === 'html') elements.push({ type: 'html', html: '<div style="color:#fff;padding:8px;">Custom HTML</div>', y: 100, width: 220, height: 150 });
+    if (type === 'text') elements.push({ type: 'text', text: 'Новый текст', fontSize: 16, color: '#ffffff' });
+    if (type === 'button') elements.push({ type: 'button', text: 'Кнопка', fontSize: 14, btnBg: '#00cc66' });
+    if (type === 'input') elements.push({ type: 'input', text: 'Введите текст...', fontSize: 14 });
+    if (type === 'image') elements.push({ type: 'image', src: '', width: 80, height: 60 });
+    if (type === 'video') elements.push({ type: 'video', src: '', label: 'Video' });
+    if (type === 'html') elements.push({ type: 'html', html: '<div style="color:#fff;padding:8px;">Custom HTML</div>' });
 
-    refreshPanelTexture(selectedObject);
+    refreshPanelDOM(selectedObject);
     renderUIElementsList();
 }
 
@@ -250,17 +285,23 @@ export function updateUIElement(index, key, value) {
         if (key === 'src') {
             el[key] = normalizePath(value);
         } else {
-            el[key] = (key === 'y' || key === 'fontSize' || key === 'width' || key === 'height') ? parseInt(value) : value;
+            el[key] = (key === 'fontSize' || key === 'width' || key === 'height') ? parseInt(value) : value;
         }
-        refreshPanelTexture(selectedObject);
+        refreshPanelDOM(selectedObject);
     }
 }
 
 export function removeUIElement(index) {
     if (!selectedObject || !selectedObject.userData.panelData) return;
     selectedObject.userData.panelData.elements.splice(index, 1);
-    refreshPanelTexture(selectedObject);
+    refreshPanelDOM(selectedObject);
     renderUIElementsList();
+}
+
+export function updatePanelCSS(cssText) {
+    if (!selectedObject || selectedObject.userData.type !== 'panel') return;
+    selectedObject.userData.customCSS = cssText == null ? '' : String(cssText);
+    applyPanelCustomCSS(selectedObject);
 }
 
 export function updateDesignPanelProp(key, value) {
@@ -280,7 +321,7 @@ export function updateDesignPanelProp(key, value) {
     const newPanelData = buildPropPanelVisual(props);
     selectedObject.userData.panelData = newPanelData;
     selectedObject.userData.innerHTML = serializePropPanelDiv(props);
-    refreshPanelTexture(selectedObject);
+    refreshPanelDOM(selectedObject);
 }
 
 export function updateObjectProp(key, value) {
@@ -332,7 +373,7 @@ export function addObject3D() {
         rotation: '0,0,0'
     });
     addEditableObject(object);
-    getSelectedObject(object);
+    import('./scene.js').then(m => m.selectObject(object));
 }
 
 export function addVideoObject3D() {
@@ -342,7 +383,7 @@ export function addVideoObject3D() {
         position: '0,0,0', rotation: '0,0,0'
     });
     addEditableObject(video);
-    getSelectedObject(video);
+    import('./scene.js').then(m => m.selectObject(video));
 }
 
 export function addHtmlObject3D() {
@@ -352,7 +393,7 @@ export function addHtmlObject3D() {
         position: '0,0,0', rotation: '0,0,0'
     }, '<div style="color:#fff;padding:8px;">Custom HTML</div>');
     addEditableObject(htmlObj);
-    getSelectedObject(htmlObj);
+    import('./scene.js').then(m => m.selectObject(htmlObj));
 }
 
 export function addPanel() {
@@ -367,7 +408,7 @@ export function addPanel() {
         '<div class="panel"><div class="label">New Panel</div></div>'
     );
     addEditableObject(panel);
-    getSelectedObject(panel);
+    import('./scene.js').then(m => m.selectObject(panel));
 }
 
 export function deleteSelectedObject() {

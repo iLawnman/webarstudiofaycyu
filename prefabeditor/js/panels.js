@@ -1,8 +1,48 @@
-/** Панели: рендер на canvas, парсинг HTML, prop-панели из JSON */
+/** Панели: DOM-рендер через CSS2D, парсинг HTML, prop-панели из JSON + custom CSS */
 
 import { normalizePath, escapeAttr, decodeHtmlB64 } from './utils.js';
 
 export const DESIGN_PROP_KEYS = ['font', 'color', 'image', 'fx', 'sound', 'text', 'prefab'];
+
+/** Стандартные DOM-элементы */
+function createTextEl(text, opts = {}) {
+    const el = document.createElement('div');
+    el.className = 'ui-text';
+    el.textContent = text || '';
+    if (opts.fontSize) el.style.fontSize = opts.fontSize + 'px';
+    if (opts.color) el.style.color = opts.color;
+    if (opts.fontWeight) el.style.fontWeight = opts.fontWeight;
+    if (opts.y != null) el.style.marginTop = (opts.y > 0 ? 4 : 0) + 'px';
+    return el;
+}
+
+function createButtonEl(text, opts = {}) {
+    const el = document.createElement('button');
+    el.className = 'ui-button';
+    el.textContent = text || 'Button';
+    if (opts.btnBg) el.style.background = opts.btnBg;
+    if (opts.fontSize) el.style.fontSize = opts.fontSize + 'px';
+    return el;
+}
+
+function createInputEl(placeholder, opts = {}) {
+    const el = document.createElement('input');
+    el.className = 'ui-input';
+    el.type = 'text';
+    el.placeholder = placeholder || '';
+    if (opts.fontSize) el.style.fontSize = opts.fontSize + 'px';
+    return el;
+}
+
+function createImageEl(src, opts = {}) {
+    const el = document.createElement('img');
+    el.className = 'ui-image';
+    el.src = src || '';
+    el.alt = opts.alt || '';
+    if (opts.width) el.style.width = opts.width + 'px';
+    if (opts.height) el.style.height = opts.height + 'px';
+    return el;
+}
 
 export function buildPropPanelVisual(props) {
     const panelData = { bgColor: '#181830', borderColor: '#4a5568', elements: [], props };
@@ -12,32 +52,32 @@ export function buildPropPanelVisual(props) {
         panelData.bgColor = /^[0-9a-fA-F]{6,8}$/.test(c) ? '#' + c.slice(0, 6) : panelData.bgColor;
     }
 
-    let y = 26;
-    panelData.elements.push({ type: 'text', text: props.group || '', y, fontSize: 17, fontWeight: 'bold', color: '#ffd700' });
-    y += 26;
+    let y = 8;
+    panelData.elements.push({ type: 'text', text: props.group || '', y, fontSize: 15, fontWeight: 'bold', color: '#ffd700' });
+    y += 22;
 
     if (props.image) {
-        panelData.elements.push({ type: 'text', text: '[IMG] ' + String(props.image).split('/').pop(), y, fontSize: 13, color: '#7dd3fc' });
-        y += 20;
+        panelData.elements.push({ type: 'image', src: props.image, y, width: 80, height: 60 });
+        y += 68;
     }
     if (props.text) {
-        panelData.elements.push({ type: 'text', text: props.text, y, fontSize: 15, color: '#ffffff' });
+        panelData.elements.push({ type: 'text', text: props.text, y, fontSize: 14, color: '#ffffff' });
         y += 20;
     }
     if (props.font) {
-        panelData.elements.push({ type: 'text', text: 'Font: ' + props.font, y, fontSize: 12, color: '#94a3b8' });
+        panelData.elements.push({ type: 'text', text: 'Font: ' + props.font, y, fontSize: 11, color: '#94a3b8' });
         y += 16;
     }
     if (props.fx) {
-        panelData.elements.push({ type: 'text', text: 'FX: ' + props.fx, y, fontSize: 12, color: '#94a3b8' });
+        panelData.elements.push({ type: 'text', text: 'FX: ' + props.fx, y, fontSize: 11, color: '#94a3b8' });
         y += 16;
     }
     if (props.sound) {
-        panelData.elements.push({ type: 'text', text: 'Sound: ' + props.sound, y, fontSize: 12, color: '#94a3b8' });
+        panelData.elements.push({ type: 'text', text: 'Sound: ' + props.sound, y, fontSize: 11, color: '#94a3b8' });
         y += 16;
     }
     if (props.prefab) {
-        panelData.elements.push({ type: 'text', text: 'Prefab: ' + props.prefab, y, fontSize: 12, color: '#94a3b8' });
+        panelData.elements.push({ type: 'text', text: 'Prefab: ' + props.prefab, y, fontSize: 11, color: '#94a3b8' });
         y += 16;
     }
 
@@ -52,104 +92,161 @@ export function serializePropPanelDiv(props) {
     return `<div ${attrs}></div>`;
 }
 
-export function drawVideoPlaceholder(ctx, w, el) {
-    const ew = el.width || (w - 40);
-    const eh = el.height || 120;
-    const ex = (w - ew) / 2;
-    const ey = el.y || 100;
+export function buildPanelDOM(panelData) {
+    const root = document.createElement('div');
+    root.className = 'css2d-panel';
+    root.style.background = panelData.bgColor || '#0a0a1e';
+    root.style.border = panelData.borderColor ? `3px solid ${panelData.borderColor}` : 'none';
+    root.style.width = '300px';
+    root.style.minHeight = '180px';
+    root.style.padding = '10px';
+    root.style.boxSizing = 'border-box';
+    root.style.fontFamily = 'Inter, sans-serif';
+    root.style.color = '#fff';
+    root.style.overflow = 'hidden';
+    root.style.borderRadius = '6px';
+    root.style.display = 'flex';
+    root.style.flexDirection = 'column';
+    root.style.gap = '6px';
+    root.style.pointerEvents = 'none';
 
-    ctx.fillStyle = '#000';
-    ctx.fillRect(ex, ey, ew, eh);
-    ctx.strokeStyle = '#555';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(ex, ey, ew, eh);
+    (panelData.elements || []).forEach(el => {
+        let node;
+        if (el.type === 'text' || el.type === 'label') {
+            node = createTextEl(el.text, el);
+        } else if (el.type === 'button') {
+            node = createButtonEl(el.text, el);
+        } else if (el.type === 'input') {
+            node = createInputEl(el.text, el);
+        } else if (el.type === 'image') {
+            node = createImageEl(el.src || el.image, el);
+        } else if (el.type === 'video') {
+            node = buildVideoDOM(el);
+        } else if (el.type === 'html') {
+            node = buildHtmlDOM(el.html || '');
+            node.style.width = (el.width || 220) + 'px';
+            node.style.height = (el.height || 150) + 'px';
+        }
+        if (node) root.appendChild(node);
+    });
 
-    const cx = ex + ew / 2;
-    const cy = ey + eh / 2;
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.moveTo(cx - 18, cy - 24);
-    ctx.lineTo(cx - 18, cy + 24);
-    ctx.lineTo(cx + 26, cy);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(el.label || el.src || 'Video', cx, ey + eh + 22);
+    return root;
 }
 
-export function drawHtmlBlockAsync(ctx, el, texture) {
-    const ew = el.width || 220;
-    const eh = el.height || 150;
-    const ex = el.x || (256 - ew) / 2;
-    const ey = el.y || 100;
-    const html = el.html || '';
+export function buildVideoDOM(opts = {}) {
+    const wrap = document.createElement('div');
+    wrap.className = 'css2d-video';
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.alignItems = 'center';
+    wrap.style.gap = '4px';
+    wrap.style.pointerEvents = 'none';
 
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ew}" height="${eh}">
-      <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${ew}px;height:${eh}px;overflow:hidden;">${html}</div>
-      </foreignObject>
-    </svg>`;
+    const video = document.createElement('video');
+    video.className = 'ui-video';
+    video.src = opts.src || '';
+    video.muted = true;
+    video.playsInline = true;
+    video.style.width = '100%';
+    video.style.maxHeight = '120px';
+    video.style.background = '#000';
+    video.style.borderRadius = '4px';
 
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-        ctx.drawImage(img, ex, ey, ew, eh);
-        URL.revokeObjectURL(url);
-        texture.needsUpdate = true;
-    };
-    img.onerror = () => URL.revokeObjectURL(url);
-    img.src = url;
+    const label = document.createElement('div');
+    label.className = 'video-label';
+    label.textContent = opts.label || opts.src || 'Video';
+    label.style.fontSize = '12px';
+    label.style.color = '#ccc';
+
+    wrap.appendChild(video);
+    wrap.appendChild(label);
+    return wrap;
 }
 
-export function renderPanelToCanvas(panelData) {
-    const canvas = document.getElementById('render-canvas');
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
+export function buildHtmlDOM(html) {
+    const el = document.createElement('div');
+    el.className = 'css2d-html';
+    el.style.pointerEvents = 'none';
+    el.style.overflow = 'hidden';
+    el.innerHTML = html || '';
+    return el;
+}
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = panelData.bgColor || '#0a0a1e';
-    ctx.fillRect(0, 0, w, h);
+/**
+ * Скоупинг CSS под конкретную панель.
+ * - если нет «{» — набор свойств → .scope { ... }
+ * - :scope и .css2d-panel заменяются на селектор панели
+ */
+export function scopePanelCSS(css, scopeSelector) {
+    if (!css || !String(css).trim()) return '';
+    const text = String(css).trim();
+    if (!text.includes('{')) {
+        return scopeSelector + ' {\n  ' + text + '\n}\n';
+    }
+    return text
+        .replace(/:scope\b/g, scopeSelector)
+        .replace(/\.css2d-panel\b/g, scopeSelector);
+}
 
-    if (panelData.borderColor) {
-        ctx.strokeStyle = panelData.borderColor;
-        ctx.lineWidth = 8;
-        ctx.strokeRect(4, 4, w - 8, h - 8);
+/** Применить customCSS панели к DOM в сцене (CSS2D) */
+export function applyPanelCustomCSS(obj) {
+    if (!obj || !obj.userData.domElement) return;
+
+    if (!obj.userData.cssUid) {
+        obj.userData.cssUid = 'p' + Math.random().toString(36).slice(2, 9);
+    }
+    const uid = obj.userData.cssUid;
+    const scope = '.ar-panel-' + uid;
+    const el = obj.userData.domElement;
+
+    el.classList.add('ar-panel', 'ar-panel-' + uid);
+
+    const styleId = 'ar-css-' + uid;
+    let styleEl = document.getElementById(styleId);
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
     }
 
-    const texture = new THREE.CanvasTexture(canvas);
-
-    if (panelData.elements) {
-        panelData.elements.forEach(el => {
-            ctx.fillStyle = el.color || '#ffffff';
-            ctx.font = `${el.fontWeight || 'normal'} ${el.fontSize || 20}px sans-serif`;
-            ctx.textAlign = 'center';
-
-            if (el.type === 'text' || el.type === 'label') {
-                ctx.fillText(el.text || '', w / 2, el.y || 50);
-            } else if (el.type === 'button') {
-                ctx.fillStyle = el.btnBg || '#00cc66';
-                ctx.fillRect(20, el.y - 30, w - 40, 50);
-                ctx.fillStyle = el.color || '#ffffff';
-                ctx.fillText(el.text || 'Button', w / 2, el.y + 5);
-            } else if (el.type === 'input') {
-                ctx.strokeStyle = '#666';
-                ctx.strokeRect(20, el.y - 20, w - 40, 40);
-                ctx.fillStyle = '#aaa';
-                ctx.fillText(el.text || 'Input...', w / 2, el.y + 5);
-            } else if (el.type === 'video') {
-                drawVideoPlaceholder(ctx, w, el);
-            } else if (el.type === 'html') {
-                drawHtmlBlockAsync(ctx, el, texture);
-            }
+    const css = (obj.userData.customCSS || '').trim();
+    // Inline-стили сильнее stylesheet — снимаем их, чтобы CSS редактора работал
+    if (css) {
+        ['background', 'backgroundColor', 'backgroundImage', 'border', 'borderColor',
+         'borderWidth', 'borderStyle', 'borderRadius', 'color', 'padding', 'boxShadow',
+         'fontFamily', 'fontSize', 'opacity'].forEach(prop => {
+            el.style[prop] = '';
         });
+        styleEl.textContent = scopePanelCSS(css, scope);
+    } else {
+        styleEl.textContent = '';
+        // вернуть дефолты из panelData
+        const pd = obj.userData.panelData || {};
+        el.style.background = pd.bgColor || '#0a0a1e';
+        el.style.border = pd.borderColor ? ('3px solid ' + pd.borderColor) : 'none';
     }
+}
 
-    texture.needsUpdate = true;
-    return texture;
+/** Удалить stylesheet панели */
+export function removePanelCustomCSS(obj) {
+    if (!obj || !obj.userData.cssUid) return;
+    const styleEl = document.getElementById('ar-css-' + obj.userData.cssUid);
+    if (styleEl) styleEl.remove();
+}
+
+export function refreshPanelDOM(obj) {
+    if (!obj || !obj.userData.domElement || !obj.userData.panelData) return;
+    const newDom = buildPanelDOM(obj.userData.panelData);
+    obj.userData.domElement.innerHTML = '';
+    // если есть customCSS — не ставим inline background/border (иначе CSS не применится)
+    if (!(obj.userData.customCSS || '').trim()) {
+        obj.userData.domElement.style.background = newDom.style.background;
+        obj.userData.domElement.style.border = newDom.style.border;
+    }
+    while (newDom.firstChild) {
+        obj.userData.domElement.appendChild(newDom.firstChild);
+    }
+    applyPanelCustomCSS(obj);
 }
 
 export function parsePanelHTML(html) {
@@ -158,7 +255,7 @@ export function parsePanelHTML(html) {
 
     if (html.includes('prop-panel')) {
         const parser = new DOMParser();
-        const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+        const doc = parser.parseFromString('<div>' + html + '</div>', 'text/html');
         const el = doc.querySelector('.prop-panel');
         const props = {};
         if (el) {
@@ -177,30 +274,23 @@ export function parsePanelHTML(html) {
         panelData.borderColor = '#FFD700';
 
         const parser = new DOMParser();
-        const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+        const doc = parser.parseFromString('<div>' + html + '</div>', 'text/html');
         const groups = doc.querySelectorAll('.panel-group');
 
-        let currentY = 30;
+        let currentY = 8;
         groups.forEach(group => {
             const groupName = group.getAttribute('data-name') || '';
 
             const img = group.querySelector('img.panel-image');
             if (img) {
-                const src = img.getAttribute('src');
-                const imgColor = img.getAttribute('data-color') || '';
-                const imgFx = img.getAttribute('data-fx') || '';
-                let imgDetails = `[IMG: ${src}]`;
-                if (imgColor) imgDetails += ` (Color: #${imgColor})`;
-                if (imgFx) imgDetails += ` (FX: ${imgFx})`;
-
                 panelData.elements.push({
-                    type: 'text',
-                    text: imgDetails,
+                    type: 'image',
+                    src: img.getAttribute('src') || '',
                     y: currentY,
-                    fontSize: 14,
-                    color: '#888888'
+                    width: 80,
+                    height: 50
                 });
-                currentY += 20;
+                currentY += 56;
             }
 
             const textBlock = group.querySelector('.panel-text-block');
@@ -210,20 +300,19 @@ export function parsePanelHTML(html) {
                 const textSpan = textBlock.querySelector('.label-text');
                 const labelText = textSpan ? textSpan.textContent : '';
 
-                let displayStr = `${groupName}: ${labelText}`;
-                if (fx) displayStr += ` (FX: ${fx})`;
+                let displayStr = groupName + ': ' + labelText;
+                if (fx) displayStr += ' (FX: ' + fx + ')';
 
                 panelData.elements.push({
                     type: 'text',
                     text: displayStr,
                     y: currentY,
-                    fontSize: 16,
+                    fontSize: 14,
                     color: color.startsWith('#') ? color : '#' + color
                 });
-                currentY += 24;
+                currentY += 22;
             }
-
-            currentY += 10;
+            currentY += 8;
         });
         return panelData;
     }
@@ -237,33 +326,44 @@ export function parsePanelHTML(html) {
     }
 
     const labelMatch = html.match(/class="label">([^<]+)</);
-    if (labelMatch) panelData.elements.push({ type: 'text', text: labelMatch[1], y: 40, fontSize: 24, color: panelData.borderColor });
+    if (labelMatch) panelData.elements.push({ type: 'text', text: labelMatch[1], y: 8, fontSize: 18, color: panelData.borderColor || '#fff' });
 
     const nameMatch = html.match(/class="name">([^<]+)</);
-    if (nameMatch) panelData.elements.push({ type: 'text', text: nameMatch[1], y: 160, fontSize: 32, fontWeight: 'bold' });
+    if (nameMatch) panelData.elements.push({ type: 'text', text: nameMatch[1], y: 40, fontSize: 22, fontWeight: 'bold' });
 
     const subMatch = html.match(/class="sub">([^<]+)</);
-    if (subMatch) panelData.elements.push({ type: 'text', text: subMatch[1], y: 250, fontSize: 20, color: '#aaa' });
+    if (subMatch) panelData.elements.push({ type: 'text', text: subMatch[1], y: 70, fontSize: 14, color: '#aaa' });
 
     const btnMatch = html.match(/class="btn">([^<]+)</);
-    if (btnMatch) panelData.elements.push({ type: 'button', text: btnMatch[1], y: 480, fontSize: 32, btnBg: '#00cc66' });
+    if (btnMatch) panelData.elements.push({ type: 'button', text: btnMatch[1], y: 100, fontSize: 16, btnBg: '#00cc66' });
 
     const videoMatch = html.match(/<video[^>]*data-src="([^"]*)"[^>]*data-y="([^"]*)"[^>]*>/);
     if (videoMatch) {
-        panelData.elements.push({ type: 'video', src: normalizePath(videoMatch[1]), label: 'Video', y: parseFloat(videoMatch[2]) || 150, width: 200, height: 120 });
+        panelData.elements.push({
+            type: 'video',
+            src: normalizePath(videoMatch[1]),
+            label: 'Video',
+            y: parseFloat(videoMatch[2]) || 80,
+            width: 200,
+            height: 110
+        });
     }
 
     const htmlBlockRegex = /<div class="html-block" data-raw-b64="([^"]*)" data-y="([^"]*)"[^>]*><\/div>/g;
     let hbMatch;
     while ((hbMatch = htmlBlockRegex.exec(html)) !== null) {
-        panelData.elements.push({ type: 'html', html: decodeHtmlB64(hbMatch[1]), y: parseFloat(hbMatch[2]) || 100, width: 220, height: 150 });
+        panelData.elements.push({
+            type: 'html',
+            html: decodeHtmlB64(hbMatch[1]),
+            y: parseFloat(hbMatch[2]) || 60,
+            width: 220,
+            height: 140
+        });
     }
 
     return panelData;
 }
 
 export function refreshPanelTexture(obj) {
-    const texture = renderPanelToCanvas(obj.userData.panelData);
-    obj.material.map = texture;
-    obj.material.needsUpdate = true;
+    refreshPanelDOM(obj);
 }

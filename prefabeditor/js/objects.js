@@ -1,9 +1,47 @@
-/** Создание 3D-объектов: model, panel, video, html */
+/** Создание 3D-объектов: model (Mesh), panel/video/html (CSS3DObject + proxy plane (поворот сохраняется)) */
 
-import { normalizePath, applyTransformData } from './utils.js';
-import { parsePanelHTML, renderPanelToCanvas, drawVideoPlaceholder, drawHtmlBlockAsync } from './panels.js';
+import { normalizePath, applyTransformData, decodeHtmlB64 } from './utils.js';
+import {
+    parsePanelHTML,
+    buildPanelDOM,
+    buildVideoDOM,
+    buildHtmlDOM,
+    refreshPanelDOM,
+    applyPanelCustomCSS
+} from './panels.js';
 
 const objLoader = new THREE.OBJLoader();
+
+/** Невидимый plane для raycast + CSS3DObject */
+function createCSS3DWrapper(width, height, domElement) {
+    const group = new THREE.Group();
+
+    const geo = new THREE.PlaneGeometry(width, height);
+    const mat = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0.001,
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+    const proxy = new THREE.Mesh(geo, mat);
+    proxy.name = 'proxy';
+    group.add(proxy);
+
+    const CssObj = (typeof THREE.CSS3DObject === 'function') ? THREE.CSS3DObject : THREE.CSS2DObject;
+    const css3d = new CssObj(domElement);
+    css3d.position.set(0, 0, 0);
+    // CSS3D: 1 unit ≈ 1 px при scale=1 → масштаб px→м: width_m / width_px
+    const baseW = 300;
+    const baseH = 180;
+    css3d.scale.set(width / baseW, height / baseH, width / baseW);
+    group.add(css3d);
+
+    group.userData.proxy = proxy;
+    group.userData.css2dObject = css3d; // имя ключа сохранено для совместимости
+    group.userData.domElement = domElement;
+
+    return group;
+}
 
 export function createObjectMesh(data = {}) {
     const group = new THREE.Group();
@@ -57,98 +95,118 @@ export function createVideoMesh(data = {}) {
     const width = parseFloat(data.width) || 0.2;
     const height = parseFloat(data.height) || 0.12;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 160;
-    const ctx = canvas.getContext('2d');
-    const texture = new THREE.CanvasTexture(canvas);
+    const dom = buildVideoDOM({
+        src: normalizePath(data.src || ''),
+        label: data.label || 'Video'
+    });
 
-    const geo = new THREE.PlaneGeometry(width, height);
-    const mat = new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.name = data.name || 'video_' + Date.now().toString().slice(-4);
-    mesh.userData = {
-        type: 'video', rawData: data,
-        src: normalizePath(data.src || ''), label: data.label || 'Video',
-        width, height, canvas, ctx, texture
+    const group = createCSS3DWrapper(width, height, dom);
+    group.name = data.name || 'video_' + Date.now().toString().slice(-4);
+    group.userData = {
+        type: 'video',
+        rawData: data,
+        src: normalizePath(data.src || ''),
+        label: data.label || 'Video',
+        width,
+        height,
+        ...group.userData
     };
 
-    applyTransformData(mesh, data);
-    refreshVideoTexture(mesh);
-    return mesh;
+    applyTransformData(group, data);
+    return group;
 }
 
 export function refreshVideoTexture(mesh) {
-    const { canvas, ctx } = mesh.userData;
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawVideoPlaceholder(ctx, canvas.width, {
-        width: canvas.width - 32, height: canvas.height - 60, y: 12,
-        label: mesh.userData.label, src: mesh.userData.src
-    });
-    mesh.userData.texture.needsUpdate = true;
+    const dom = mesh.userData.domElement;
+    if (!dom) return;
+    const video = dom.querySelector('video');
+    const label = dom.querySelector('.video-label');
+    if (video) {
+        video.src = mesh.userData.src || '';
+        video.load();
+    }
+    if (label) label.textContent = mesh.userData.label || 'Video';
 }
 
 export function createHtmlMesh(data = {}, rawHtml = '') {
     const width = parseFloat(data.width) || 0.2;
     const height = parseFloat(data.height) || 0.14;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 180;
-    const ctx = canvas.getContext('2d');
-    const texture = new THREE.CanvasTexture(canvas);
-
     const html = rawHtml || data.html || '<div style="color:#fff;padding:8px;">Custom HTML</div>';
 
-    const geo = new THREE.PlaneGeometry(width, height);
-    const mat = new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.name = data.name || 'html_' + Date.now().toString().slice(-4);
-    mesh.userData = { type: 'html', rawData: data, html, width, height, canvas, ctx, texture };
+    const dom = buildHtmlDOM(html);
 
-    applyTransformData(mesh, data);
-    refreshHtmlTexture(mesh);
-    return mesh;
+    const group = createCSS3DWrapper(width, height, dom);
+    group.name = data.name || 'html_' + Date.now().toString().slice(-4);
+    group.userData = {
+        type: 'html',
+        rawData: data,
+        html,
+        width,
+        height,
+        ...group.userData
+    };
+
+    applyTransformData(group, data);
+    return group;
 }
 
 export function refreshHtmlTexture(mesh) {
-    const { canvas, ctx, html, texture } = mesh.userData;
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawHtmlBlockAsync(ctx, { html, x: 8, y: 8, width: canvas.width - 16, height: canvas.height - 16 }, texture);
+    const dom = mesh.userData.domElement;
+    if (!dom) return;
+    dom.innerHTML = mesh.userData.html || '';
 }
 
 export function createPanelMesh(data = {}, innerHTML = '') {
     const width = parseFloat(data.width) || 0.3;
     const height = parseFloat(data.height) || 0.3;
-    const geo = new THREE.PlaneGeometry(width, height);
+
+    // CSS из data-css (base64) / data-custom-css / <style> внутри HTML
+    let customCSS = '';
+    if (data.css) {
+        customCSS = decodeHtmlB64(data.css) || data.css;
+    } else if (data.customCss) {
+        customCSS = decodeHtmlB64(data.customCss) || data.customCss;
+    } else if (data.customCSS) {
+        customCSS = data.customCSS;
+    }
+    if (!customCSS && innerHTML && innerHTML.includes('<style')) {
+        const m = innerHTML.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+        if (m) customCSS = m[1].trim();
+    }
 
     const panelData = parsePanelHTML(innerHTML);
-    const texture = renderPanelToCanvas(panelData);
+    const dom = buildPanelDOM(panelData);
 
-    const mat = new THREE.MeshStandardMaterial({
-        map: texture,
-        side: THREE.DoubleSide,
-        transparent: true
-    });
-
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.name = data.name || 'panel_' + Date.now().toString().slice(-4);
-    mesh.userData = {
+    const group = createCSS3DWrapper(width, height, dom);
+    group.name = data.name || 'panel_' + Date.now().toString().slice(-4);
+    group.userData = {
         type: 'panel',
         rawData: data,
-        panelData: panelData,
+        panelData,
         innerHTML: innerHTML,
+        customCSS: customCSS || '',
         width,
-        height
+        height,
+        ...group.userData
     };
 
-    applyTransformData(mesh, data);
-    return mesh;
+    applyTransformData(group, data);
+    applyPanelCustomCSS(group);
+    return group;
 }
 
 export function rebuildPlaneGeometry(mesh) {
-    mesh.geometry.dispose();
-    mesh.geometry = new THREE.PlaneGeometry(mesh.userData.width, mesh.userData.height);
+    const w = mesh.userData.width || 0.3;
+    const h = mesh.userData.height || 0.3;
+
+    if (mesh.userData.proxy) {
+        mesh.userData.proxy.geometry.dispose();
+        mesh.userData.proxy.geometry = new THREE.PlaneGeometry(w, h);
+    }
+
+    if (mesh.userData.css2dObject) {
+        const baseW = 300;
+        const baseH = 180;
+        mesh.userData.css2dObject.scale.set(w / baseW, h / baseH, w / baseW);
+    }
 }

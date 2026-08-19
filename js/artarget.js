@@ -1,344 +1,327 @@
 import * as THREE from 'three';
-
-const DEFAULT_TEMPLATE_URL = '/assets/artarget.html';
+import { CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 
 /**
- * ModelFactory — central builder for AR target objects.
- * HTML templates remain the single source of truth for panel content, size and placement.
- * Procedural (canvas) fallback is available for offline / no-foreignObject environments.
+ * ModelFactory — строит AR-таргет: физический маркер (сфера в WebGL) +
+ * интерактивная HTML-панель вопроса (CSS3DObject), являющаяся частью
+ * того же THREE.Group и следующая за трекингом маркера с сохранением поворота.
  */
 export class ModelFactory {
     /**
-     * @param {object} [defaults]
-     * @param {string} [defaults.templateUrl]
-     */
-    constructor(defaults = {}) {
-        this.templateUrl = defaults.templateUrl || DEFAULT_TEMPLATE_URL;
-    }
-
-    /**
-     * Abstract AR object: panels + layout come from declarative HTML.
-     * @param {string|object} [targetData=''] Target identifier or data object
+     * Синхронное создание AR-таргета с полноценной панелью вопроса.
+     * Никаких Promise — вызывается прямо в кадровом цикле (processTracking).
+     *
+     * @param {string|object} [targetData='']
+     * @param {object} [targetData.title]
+     * @param {object} [targetData.question]      Текст вопроса
+     * @param {object} [targetData.mainText]       Текст-заглушка для Slide без вариантов
+     * @param {'Slide'|'Button'|'InputField'|'Art'|'AntiArt'} [targetData.answerType]
+     * @param {Array}  [targetData.options]
+     * @param {string} [targetData.imageSrc]       Картинка распознанного маркера
      * @param {object} [options]
-     * @param {Function|null} [options.onOk]
-     * @param {string} [options.templateUrl]
-     * @param {object} [options.vars] Additional variables for template substitution
-     * @returns {Promise<THREE.Group>}
-     */
-    async createArTarget(targetData = '', options = {}) {
-        const { onOk = null, templateUrl = this.templateUrl, vars: extraVars = {} } = options;
-
-        const targetInfo = typeof targetData === 'object' && targetData !== null
-            ? targetData
-            : { title: String(targetData) };
-
-        const title = targetInfo.title ?? targetInfo.name ?? String(targetData ?? '');
-        const groupName = targetInfo.id || title || 'target';
-
-        const group = new THREE.Group();
-        group.name = `arTarget_${groupName}`;
-
-        const sphere = this._createSphere();
-        group.add(sphere);
-
-        const template = await this._loadTemplate(templateUrl);
-        const panels = template.querySelectorAll('panel');
-
-        // Генерируем HTML содержимого оверлей-панели для подстановки в шаблон
-        const imageSrc = extraVars.imageSrc || targetInfo.imageSrc || '';
-        const imageHtml = imageSrc ? `<img class="panel-img" src="${imageSrc}" alt="target" />` : '';
-        const questionText = extraVars.question || targetInfo.question || title || '';
-        const bodyHtml = this._buildQuestionBodyHtml(extraVars);
-
-        const templateVars = {
-            title: title,
-            textLabel: targetInfo.textLabel ?? 'MARKER',
-            imgLabel: targetInfo.imgLabel ?? 'IMAGE',
-            subtitle: targetInfo.subtitle ?? 'AR Target',
-            okText: targetInfo.okText ?? 'OK',
-            markerName: title,
-            imageHtml: imageHtml,
-            question: questionText,
-            bodyHtml: bodyHtml,
-            ...extraVars
-        };
-
-        const userData = {
-            targetInfo,
-            markerName: title,
-            sphere,
-            onOk,
-            panels: {}
-        };
-
-        for (const panelEl of panels) {
-            const mesh = await this._createPanelFromHtml(panelEl, templateVars);
-            group.add(mesh);
-            userData.panels[mesh.name] = mesh;
-            userData[mesh.name] = mesh; // legacy direct access
-            if (mesh.userData.texture) {
-                userData[`${mesh.name}Texture`] = mesh.userData.texture;
-            }
-        }
-
-        group.position.z = 0.02;
-        group.userData = userData;
-
-        return group;
-    }
-
-    /**
-     * Pure-canvas fallback (no network / no foreignObject) — for offline use.
-     * @param {string|object} [targetData=''] Target identifier or data object
-     * @param {object} [options]
-     * @param {Function|null} [options.onOk]
+     * @param {Function|null} [options.onAnswer]   callback(value) — вызывается когда пользователь дал ответ
      * @returns {THREE.Group}
      */
     createArTargetSync(targetData = '', options = {}) {
-        const { onOk = null } = options;
+        const { onAnswer = null } = options;
 
         const targetInfo = typeof targetData === 'object' && targetData !== null
             ? targetData
             : { title: String(targetData) };
 
         const title = targetInfo.title ?? targetInfo.name ?? String(targetData ?? '');
-        const questionText = options.vars?.question || targetInfo.question || title || 'AR Target';
-        const okText = targetInfo.okText ?? 'OK';
-        const groupName = targetInfo.id || title || 'target';
+        const questionText = targetInfo.question || targetInfo.mainText || 'Выберите действие для продолжения:';
+        const groupName = targetInfo.questId || targetInfo.id || title || 'target';
+        const answerType = targetInfo.answerType || 'Slide';
 
         const group = new THREE.Group();
         group.name = `arTarget_${groupName}`;
 
+        // 1. Физический 3D-маркер в WebGL (зелёная точка)
         const sphere = this._createSphere();
         group.add(sphere);
-        
-        const questionPanel = this._makeCanvasPanel({
-            name: 'questionPanel',
-            w: 0.24, h: 0.30,
-            pos: [0, 0, 0.02],
-            rot: [-Math.PI / 2, 0, 0],
-            canvasW: 380, canvasH: 480,
-            draw: (ctx, cw, ch) => {
-                ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
-                ctx.fillRect(0, 0, cw, ch);
-                ctx.strokeStyle = '#00ffaa';
-                ctx.lineWidth = 6;
-                ctx.strokeRect(4, 4, cw - 8, ch - 8);
 
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 24px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(title, cw / 2, 60);
+        // 2. HTML-панель вопроса — часть таргета, не оверлей
+        const panelEl = document.createElement('div');
+        panelEl.className = 'ar-css3d-panel';
+        panelEl.style.cssText = `
+      width: 320px;
+      padding: 16px;
+      background: rgba(10, 10, 20, 0.92);
+      border: 2px solid #00ffaa;
+      border-radius: 16px;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      pointer-events: auto;
+      user-select: none;
+      transform-style: preserve-3d;
+    `;
 
-                ctx.fillStyle = '#00ffaa';
-                ctx.font = '20px sans-serif';
-                ctx.fillText(questionText, cw / 2, 140);
+        const titleEl = document.createElement('div');
+        titleEl.style.cssText = `
+      font-size: 18px;
+      font-weight: bold;
+      color: #00ffaa;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    `;
+        titleEl.textContent = title || 'ОТЛАДКА AR';
+        panelEl.appendChild(titleEl);
 
-                ctx.fillStyle = 'rgba(0, 40, 20, 0.95)';
-                ctx.fillRect(cw / 4, ch - 90, cw / 2, 50);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 22px sans-serif';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(okText, cw / 2, ch - 65);
-            }
-        });
-        group.add(questionPanel);
+        if (targetInfo.imageSrc) {
+            const imgEl = document.createElement('img');
+            imgEl.src = targetInfo.imageSrc;
+            imgEl.style.cssText = `
+        width: 100%;
+        max-height: 140px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid #00ffaa55;
+        margin-bottom: 10px;
+        display: block;
+      `;
+            panelEl.appendChild(imgEl);
+        }
 
-        group.position.z = 0.02;
-        group.rotation.set(90, 0, 0);
-        group.userData = {
-            targetInfo,
-            markerName: title,
-            sphere,
-            questionPanel,
-            questionTexture: questionPanel.userData.texture,
-            onOk
+        const questionEl = document.createElement('div');
+        questionEl.style.cssText = `
+      font-size: 14px;
+      color: #f8fafc;
+      line-height: 1.4;
+      margin-bottom: 4px;
+    `;
+        questionEl.textContent = questionText;
+        panelEl.appendChild(questionEl);
+
+        const bodyEl = document.createElement('div');
+        bodyEl.className = 'ar-quest-body';
+        panelEl.appendChild(bodyEl);
+
+        const handleAnswer = (value) => {
+            if (typeof onAnswer === 'function') onAnswer(value);
         };
+
+        this._buildQuestionBody(bodyEl, { ...targetInfo, answerType }, handleAnswer);
+
+        // 3. CSS3DObject — панель в реальном 3D, сохраняет rotation группы
+        // scale 0.001: 320 CSS-px ≈ 0.32 м в мире
+        const cssObject = new CSS3DObject(panelEl);
+        cssObject.scale.set(0.001, 0.001, 0.001);
+        cssObject.position.set(0, 0.15, 0); // над маркером
+        cssObject.rotation.set(-90, 0, 0); // поворот
+        group.add(cssObject);
+
+        group.userData = { targetInfo, sphere, cssObject, panelEl, onAnswer, answerType };
         return group;
     }
 
-    _buildQuestionBodyHtml(vars = {}) {
-        const type = vars.answerType || 'Slide';
-        const options = vars.options || [];
+    /**
+     * Строит интерактивное тело панели в зависимости от answerType.
+     */
+    _buildQuestionBody(bodyEl, data, onAnswer) {
+        bodyEl.innerHTML = '';
+
+        const type = data.answerType || 'Slide';
+        const options = data.options || [];
 
         if (type === 'Button') {
-            const btns = options.map((opt, idx) => 
-                `<div class="quest-btn">${opt.text || `Вариант ${idx + 1}`}</div>`
-            ).join('');
-            return `<div class="quest-options-grid">${btns}</div>`;
+            const grid = document.createElement('div');
+            grid.className = 'ar-quest-options-grid';
+            grid.style.cssText = `display:flex; flex-direction:column; gap:8px; margin-top:12px;`;
+
+            options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'ar-quest-btn';
+                btn.textContent = opt.text || `Вариант ${idx + 1}`;
+                btn.style.cssText = `
+          width: 100%;
+          padding: 12px;
+          background: #ffaa00;
+          color: #000000;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: bold;
+          cursor: pointer;
+        `;
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    onAnswer(idx + 1);
+                });
+                grid.appendChild(btn);
+            });
+
+            bodyEl.appendChild(grid);
+
         } else if (type === 'InputField') {
-            const val = vars.inputValue || '';
-            return `
-                <div class="quest-input-block">
-                    <div class="quest-input">${val || 'Введите ответ...'}</div>
-                    <div class="quest-submit-btn">OK</div>
-                </div>`;
+            const wrap = document.createElement('div');
+            wrap.className = 'ar-quest-input-block';
+            wrap.style.cssText = `display:flex; gap:8px; margin-top:12px;`;
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'ar-quest-input';
+            input.placeholder = 'Введите ответ...';
+            input.style.cssText = `
+        flex: 1;
+        min-width: 0;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #00ffaa;
+        background: #0a0a14;
+        color: #ffffff;
+        font-size: 14px;
+      `;
+            input.addEventListener('click', (e) => e.stopPropagation());
+            input.addEventListener('keydown', (e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') onAnswer(input.value);
+            });
+
+            const submitBtn = document.createElement('button');
+            submitBtn.className = 'ar-quest-submit-btn';
+            submitBtn.textContent = 'OK';
+            submitBtn.style.cssText = `
+        padding: 10px 16px;
+        background: #00cc66;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+      `;
+            submitBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onAnswer(input.value);
+            });
+
+            wrap.appendChild(input);
+            wrap.appendChild(submitBtn);
+            bodyEl.appendChild(wrap);
+
         } else if (type === 'Art' || type === 'AntiArt') {
-            return `<div class="quest-submit-btn quest-ok-btn">OK</div>`;
+            const btn = document.createElement('button');
+            btn.className = 'ar-quest-submit-btn ar-quest-ok-btn';
+            btn.textContent = 'OK';
+            btn.style.cssText = `
+        width: 100%;
+        margin-top: 12px;
+        padding: 10px;
+        background: #00cc66;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+      `;
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onAnswer(true);
+            });
+            bodyEl.appendChild(btn);
+
         } else {
-            const currentSlideText = options[vars.activeSlideIndex || 0]?.text || vars.mainText || '';
-            return `
-                <div class="quest-slider">
-                    <div class="slide-nav">◄</div>
-                    <div class="slide-content">${currentSlideText}</div>
-                    <div class="slide-nav">►</div>
-                </div>
-                <div class="quest-submit-btn quest-ok-btn" style="margin-top: 10px;">OK</div>`;
-        }
-    }
+            // Slide (по умолчанию)
+            let idx = 0;
+            const total = Math.max(options.length, 1);
 
-    // ─── private: HTML → THREE ─────────────────────────────────────────────────
+            const slider = document.createElement('div');
+            slider.className = 'ar-quest-slider';
+            slider.style.cssText = `display:flex; align-items:center; gap:8px; margin-top:12px;`;
 
-    async _loadTemplate(url) {
-        const res = await fetch(url);
-        const html = await res.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const template = doc.querySelector('#ar-target') || doc.querySelector('template');
-        if (!template) throw new Error(`No <template id="ar-target"> in ${url}`);
+            const navBtnStyle = `
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid #00ffaa;
+        background: transparent;
+        color: #00ffaa;
+        font-size: 16px;
+        cursor: pointer;
+      `;
 
-        const styleEl = doc.querySelector('style');
-        if (styleEl) {
-            template.dataset.style = styleEl.textContent;
-        }
-        return template;
-    }
+            const prev = document.createElement('button');
+            prev.className = 'ar-slide-nav prev';
+            prev.textContent = '◄';
+            prev.style.cssText = navBtnStyle;
 
-    async _createPanelFromHtml(panelEl, vars = {}) {
-        const name = panelEl.getAttribute('name') || 'panel';
-        const w = parseFloat(panelEl.dataset.width) || 0.24;
-        const h = parseFloat(panelEl.dataset.height) || 0.30;
-        const pos = this._parseVec3(panelEl.dataset.position, [0, 0, 0.02]);
-        const rot = this._parseVec3(panelEl.dataset.rotation, [-90, 0, 0]).map(d => d * Math.PI / 180);
+            const slideContent = document.createElement('div');
+            slideContent.className = 'ar-slide-content';
+            slideContent.style.cssText = `flex: 1; min-width: 0; font-size: 13px; color: #f8fafc; line-height: 1.4;`;
+            slideContent.textContent = options[0]?.text || data.mainText || '';
 
-        let inner = panelEl.innerHTML;
-        for (const [k, v] of Object.entries(vars)) {
-            inner = inner.replaceAll(`{{${k}}}`, String(v ?? ''));
-        }
+            const next = document.createElement('button');
+            next.className = 'ar-slide-nav next';
+            next.textContent = '►';
+            next.style.cssText = navBtnStyle;
 
-        const { cssW, cssH } = this._measurePanelCss(panelEl);
-
-        const texture = await this._htmlToTexture(
-            inner,
-            cssW,
-            cssH,
-            panelEl.closest('template')?.dataset?.style || ''
-        );
-
-        const mesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(w, h),
-            new THREE.MeshBasicMaterial({
-                map: texture,
-                transparent: true,
-                side: THREE.DoubleSide
-            })
-        );
-        mesh.name = name;
-        mesh.position.set(...pos);
-        mesh.rotation.set(...rot);
-        mesh.userData.texture = texture;
-
-        return mesh;
-    }
-
-    _measurePanelCss(panelEl) {
-        const root = panelEl.querySelector('.panel') || panelEl.firstElementChild;
-        if (!root) return { cssW: 380, cssH: 480 };
-
-        const style = root.getAttribute('style') || '';
-        const wMatch = style.match(/width:\s*([\d.]+)px/);
-        const hMatch = style.match(/height:\s*([\d.]+)px/);
-
-        let cssW = wMatch ? parseFloat(wMatch[1]) : 380;
-        let cssH = hMatch ? parseFloat(hMatch[1]) : 480;
-
-        return { cssW, cssH };
-    }
-
-    _htmlToTexture(html, width, height, cssText = '') {
-        return new Promise((resolve, reject) => {
-            const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-  <foreignObject width="100%" height="100%">
-    <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;margin:0;padding:0;overflow:hidden;">
-      <style>${cssText}</style>
-      ${html}
-    </div>
-  </foreignObject>
-</svg>`.trim();
-
-            const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                URL.revokeObjectURL(url);
-
-                const tex = new THREE.CanvasTexture(canvas);
-                tex.colorSpace = THREE.SRGBColorSpace;
-                tex.needsUpdate = true;
-                resolve(tex);
+            const update = () => {
+                slideContent.textContent = options[idx]?.text || data.mainText || '';
             };
-            img.onerror = (e) => {
-                URL.revokeObjectURL(url);
-                reject(e);
-            };
-            img.src = url;
-        });
-    }
 
-    // ─── private: helpers ──────────────────────────────────────────────────────
+            prev.addEventListener('click', (e) => {
+                e.stopPropagation();
+                idx = (idx - 1 + total) % total;
+                update();
+            });
+            next.addEventListener('click', (e) => {
+                e.stopPropagation();
+                idx = (idx + 1) % total;
+                update();
+            });
+
+            slider.appendChild(prev);
+            slider.appendChild(slideContent);
+            slider.appendChild(next);
+            bodyEl.appendChild(slider);
+
+            const okBtn = document.createElement('button');
+            okBtn.className = 'ar-quest-submit-btn ar-quest-ok-btn';
+            okBtn.textContent = 'OK';
+            okBtn.style.cssText = `
+        width: 100%;
+        margin-top: 10px;
+        padding: 10px;
+        background: #00cc66;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+      `;
+            okBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onAnswer(idx + 1);
+            });
+            bodyEl.appendChild(okBtn);
+        }
+    }
 
     _createSphere() {
-        const geo = new THREE.SphereGeometry(0.01, 24, 24);
+        const geo = new THREE.SphereGeometry(0.015, 24, 24);
         const mat = new THREE.MeshStandardMaterial({
-            color: 0xff00ff,
-            metalness: 0.3,
-            roughness: 0.4,
-            emissive: 0xff00ff,
-            emissiveIntensity: 0.15
+            color: 0x00ffaa,
+            emissive: 0x00ffaa,
+            emissiveIntensity: 0.5
         });
         return new THREE.Mesh(geo, mat);
-    }
-
-    _parseVec3(str, fallback) {
-        if (!str) return fallback.slice();
-        const parts = str.split(',').map(s => parseFloat(s.trim()));
-        return parts.length === 3 && parts.every(Number.isFinite) ? parts : fallback.slice();
-    }
-
-    _makeCanvasPanel({ name, w, h, pos, rotX, rot = [rotX ?? -Math.PI / 2, 0, 0], canvasW = 380, canvasH = 480, draw }) {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvasW;
-        canvas.height = canvasH;
-        const ctx = canvas.getContext('2d');
-        draw(ctx, canvasW, canvasH);
-
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.needsUpdate = true;
-
-        const mesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(w, h),
-            new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide })
-        );
-        mesh.name = name;
-        mesh.position.set(...pos);
-        mesh.rotation.set(...rot);
-        mesh.userData.texture = tex;
-        return mesh;
     }
 }
 
 const defaultFactory = new ModelFactory();
 
-export async function createArTarget(targetData, options = {}) {
-    return defaultFactory.createArTarget(targetData, options);
+/** Синхронное создание AR-таргета (используется в кадровом цикле). */
+export function createArTargetSync(targetData, options = {}) {
+    return defaultFactory.createArTargetSync(targetData, options);
 }
 
-export function createArTargetSync(targetData, options = {}) {
+/** Асинхронная обёртка сохранена для обратной совместимости. */
+export async function createArTarget(targetData, options = {}) {
     return defaultFactory.createArTargetSync(targetData, options);
 }

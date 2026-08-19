@@ -7,7 +7,7 @@ export class UI {
     this.hint = document.getElementById('hint');
     this.preview = document.getElementById('target-preview');
 
-    // curtain & quest-start
+    // ── новые панели overlay-флоу ──
     this.curtain = document.getElementById('curtain-panel');
     this.curtainText = document.querySelector('.curtain-text');
 
@@ -24,16 +24,12 @@ export class UI {
     this.logVisible = false;
     if (this.logPanel) this.logPanel.classList.add('collapsed');
 
-    if (this.logToggle) {
-      this.logToggle.addEventListener('click', () => {
-        this.logVisible = !this.logVisible;
-        this.logPanel.classList.toggle('collapsed', !this.logVisible);
-      });
-    }
+    this.logToggle.addEventListener('click', () => {
+      this.logVisible = !this.logVisible;
+      this.logPanel.classList.toggle('collapsed', !this.logVisible);
+    });
 
-    this._onQuestionSubmit = null;
     this._onResultClose = null;
-    this.activeArTargetGroup = null;
 
     if (this.resultCloseBtn) {
       this.resultCloseBtn.addEventListener('click', () => {
@@ -45,7 +41,6 @@ export class UI {
   }
 
   log(msg, type = '') {
-    if (!this.logPanel) return;
     const div = document.createElement('div');
     div.className = 'entry ' + type;
     const now = new Date();
@@ -57,59 +52,64 @@ export class UI {
   }
 
   setHint(text) {
-    if (this.hint) this.hint.textContent = text;
+    this.hint.textContent = text;
   }
 
   setPreview(src) {
-    if (!this.preview) return;
     this.preview.src = src;
     this.preview.style.display = 'block';
   }
 
   enableArButton() {
-    if (!this.btnAr) return;
     this.btnAr.disabled = false;
     this.btnAr.style.display = 'block';
+    // Инициализация завершена — текст «Инициализация AR…» скрывается
     if (this.curtainText) this.curtainText.classList.add('ready');
   }
 
   disableArButton() {
-    if (!this.btnAr) return;
     this.btnAr.disabled = true;
     this.btnAr.style.display = 'none';
   }
 
   showEndArButton() {
-    if (this.btnEndAr) this.btnEndAr.style.display = 'block';
+    this.btnEndAr.style.display = 'block';
   }
 
   hideEndArButton() {
-    if (this.btnEndAr) this.btnEndAr.style.display = 'none';
+    this.btnEndAr.style.display = 'none';
   }
 
   onStartAR(handler) {
-    if (this.btnAr) this.btnAr.addEventListener('click', handler);
+    this.btnAr.addEventListener('click', handler);
   }
 
   onEndAR(handler) {
-    if (this.btnEndAr) this.btnEndAr.addEventListener('click', handler);
+    this.btnEndAr.addEventListener('click', handler);
   }
 
-  // ───────────────────────── Curtain ─────────────────────────
+  // ───────────────────────── Curtain (штора инициализации) ─────────────────────────
 
+  /** Показывает штору (закрывает сцену, пока инициализируется/переинициализируется WebXR). */
   showCurtain() {
     if (!this.curtain) return;
     this.curtain.classList.remove('hidden');
+    // Вернуть текст «Инициализация AR…» при повторном показе шторы
     if (this.curtainText) this.curtainText.classList.remove('ready');
   }
 
+  /** Прячет штору (уезжает вверх) — вызывается, когда пол установлен (сессия готова). */
   hideCurtain() {
     if (!this.curtain) return;
     this.curtain.classList.add('hidden');
   }
 
-  // ───────────────────────── Quest-start panel ─────────────────────────
+  // ───────────────────────── Quest-start panel ("ИЩИТЕ!") ─────────────────────────
 
+  /**
+   * @param {string} imageSrc Картинка одного из маркеров (recognitionimages)
+   * @param {string} [text]
+   */
   showQuestStart(imageSrc, text = 'ИЩИТЕ!') {
     if (!this.questStartPanel) return;
     if (this.questStartImg) {
@@ -129,41 +129,13 @@ export class UI {
     this.questStartPanel.classList.remove('open');
   }
 
-  // ───────────────────────── Question panel (перенесена в ARTarget) ─────────────────────────
-
-  setActiveArTarget(arTargetGroup) {
-    this.activeArTargetGroup = arTargetGroup;
-  }
-
-  /**
-   * Принимает данные вопроса и выводит их внутри 3D artarget вместо оверлея
-   */
-  showQuestion(data, onSubmit) {
-    this._onQuestionSubmit = onSubmit || null;
-
-    if (this.activeArTargetGroup && this.activeArTargetGroup.userData) {
-      this.activeArTargetGroup.userData.questionData = data;
-      this.activeArTargetGroup.visible = true;
-    }
-  }
-
-  hideQuestion() {
-    if (this.activeArTargetGroup) {
-      this.activeArTargetGroup.visible = false;
-    }
-    this._onQuestionSubmit = null;
-  }
-
-  submitAnswer(value) {
-    if (this._onQuestionSubmit) {
-      const cb = this._onQuestionSubmit;
-      this._onQuestionSubmit = null;
-      cb(value);
-    }
-  }
-
   // ───────────────────────── Result panel ─────────────────────────
 
+  /**
+   * @param {boolean} isCorrect
+   * @param {string} text Текст из RightReaction / WrongReaction
+   * @param {Function} [onClose] callback вызывается по кнопке "Дальше"
+   */
   showResult(isCorrect, text, onClose) {
     if (!this.resultPanel) return;
     this._onResultClose = onClose || null;
