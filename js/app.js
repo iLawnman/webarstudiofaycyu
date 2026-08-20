@@ -1,13 +1,22 @@
 import { UI } from './ui.js';
-import { ImageRecognition } from './recognition.js';
+import { Recognition } from './recognition.js';
 import { ARScene } from './arscene.js';
 import { playSound } from "./audio.js";
+import { Settings } from './settings.js';
+import { ARSettings } from './arsettings.js';
+import { ARInput } from './arinput.js';
+import { UIInput } from './uiinput.js';
 
 export class App {
   constructor() {
     this.ui = new UI();
-    this.recognition = new ImageRecognition(this.ui);
+    this.settings = new Settings();
+    this.arSettings = new ARSettings();
+    this.recognition = null;
     this.arScene = new ARScene(this.ui);
+
+    this.arInput = new ARInput(this.ui);
+    this.uiInput = new UIInput(this.ui);
 
     this.xrSession = null;
     this.imageTrackingEnabled = false;
@@ -21,9 +30,35 @@ export class App {
   async init() {
     this.ui.log('App init (WebGL / Three.js WebXR)...', 'info');
 
-    // Штора активна с самого старта, пока идёт инициализация
+    this.uiInput.attach();
     this.ui.showCurtain();
 
+    // 0. AR CSS-темы
+    this.ui.log('Loading AR CSS themes...', 'info');
+    try {
+      await this.arSettings.init();
+      this.ui.log(
+          `AR themes ready | count=${this.arSettings.getThemes().length} active=${this.arSettings.getActiveThemeId()}`,
+          'ok'
+      );
+    } catch (e) {
+      this.ui.log('AR themes failed: ' + (e && e.message ? e.message : e), 'warn');
+    }
+
+    // 1. Settings
+    this.ui.log('Loading settings...', 'info');
+    await this.settings.load();
+    if (this.settings.isLoaded) {
+      this.ui.log(
+          `Settings loaded | unique_targets=${this.settings.uniqueTargets}`,
+          'ok'
+      );
+    } else {
+      this.ui.log('Settings failed to load, using defaults (unique_targets=0)', 'warn');
+    }
+
+    // 2. Recognition
+    this.recognition = new Recognition(this.ui, this.settings);
     await this.recognition.init();
 
     this.ui.onStartAR(() => this.startAR());
@@ -65,7 +100,7 @@ export class App {
 
     const sessionInit = {
       requiredFeatures: ['local-floor'],
-      optionalFeatures: ['image-tracking', 'dom-overlay'],
+      optionalFeatures: ['image-tracking', 'dom-overlay', 'anchors'],
       trackedImages,
       domOverlay: { root: document.body }
     };
@@ -73,7 +108,7 @@ export class App {
     try {
       this.xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
     } catch (e) {
-      this.ui.log('Session with dom-overlay failed, retrying without it...', 'warn');
+      this.ui.log('Session with dom-overlay/anchors failed, retrying without them...', 'warn');
       try {
         this.xrSession = await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: ['local-floor'],
@@ -92,14 +127,11 @@ export class App {
     await this.arScene.renderer.xr.setSession(this.xrSession);
     this.ui.log('Renderer session set (WebGL + local-floor)', 'ok');
 
-    // Показываем кнопку End AR после успешного старта сессии
     this.ui.showEndArButton();
     this.imageTrackingEnabled = true;
 
     this.recognition.attachInput(this.xrSession, this.arScene);
 
-    // Пол установлен (сессия готова) → штора уезжает вверх,
-    // сверху выезжает панель "ИЩИТЕ!" со случайным маркером
     this.ui.hideCurtain();
     this.recognition.presentSearchPrompt();
 
@@ -111,7 +143,6 @@ export class App {
       this.xrSession = null;
       this.frameCount = 0;
 
-      // Возвращаем UI в первоначальное состояние
       this.ui.hideEndArButton();
       this.ui.enableArButton();
       this.ui.showCurtain();

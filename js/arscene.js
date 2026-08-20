@@ -1,4 +1,3 @@
-// js/arscene.js
 import * as THREE from 'three';
 import { CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 
@@ -21,16 +20,16 @@ export class ARScene {
 
     document.body.appendChild(this.renderer.domElement);
 
-    // CSS3D-рендерер: HTML-панели в реальном 3D-пространстве
-    // (сохраняют rotation маркера, не billboard к камере)
     this.cssRenderer = new CSS3DRenderer();
     this.cssRenderer.setSize(window.innerWidth, window.innerHeight);
     this.cssRenderer.domElement.style.position = 'absolute';
     this.cssRenderer.domElement.style.top = '0px';
     this.cssRenderer.domElement.style.left = '0px';
-    // Клики проходят на WebGL, кроме элементов с pointer-events: auto
-    this.cssRenderer.domElement.style.pointerEvents = 'none';
+
+    // Разрешаем проброс событий к интерактивным CSS3D элементам
+    this.cssRenderer.domElement.style.pointerEvents = 'auto';
     this.cssRenderer.domElement.style.zIndex = '10';
+
     document.body.appendChild(this.cssRenderer.domElement);
 
     this.setupLighting();
@@ -82,7 +81,6 @@ export class ARScene {
 
   render() {
     this.renderer.render(this.scene, this.camera);
-    // CSS3D-слой той же XR-камерой (уже обновлённой renderer.render)
     this.cssRenderer.render(this.scene, this.camera);
   }
 }

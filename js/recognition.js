@@ -2,20 +2,26 @@ import * as THREE from 'three';
 import { createArTargetSync } from './artarget.js';
 import { playSound } from './audio.js';
 import { QuestManager } from './quests.js';
+import { Policies } from './policies.js';
+import { MediaPipeReco } from './mediapipe.js';
+import { ImageReco } from './imagereco.js';
 
-export class ImageRecognition {
-  constructor(ui) {
+export class Recognition {
+  /**
+   * @param {import('./ui.js').UI} ui
+   * @param {import('./settings.js').Settings} settings
+   */
+  constructor(ui, settings) {
     this.ui = ui;
-    /** @type {Array<{bmp: ImageBitmap, name: string, src: string, source: string}>} */
-    this.targetBitmaps = [];
-    this.trackedMarkers = new Map();
-    // waitingImage   — ждём распознавания маркера (показана панель "ИЩИТЕ!")
-    // waitingInput   — маркер найден, панель вопроса (часть AR-таргета) открыта, ждём ответа пользователя
-    // showingResult  — ответ дан, показана resultpanel
-    this.state = 'waitingImage';
+    this.settings = settings;
 
-    // Менеджер квестов для сопоставления RecognitionImage -> Quest
     this.questManager = new QuestManager();
+    this.policies = new Policies(settings, this.questManager);
+
+    this.imageReco = new ImageReco(ui, settings, this.questManager, this.policies);
+    this.mediaPipeReco = new MediaPipeReco(ui);
+
+    this.state = 'waitingImage';
 
     this._raycaster = new THREE.Raycaster();
     this._pointerNdc = new THREE.Vector2(0, 0);
@@ -23,211 +29,29 @@ export class ImageRecognition {
     this._boundOnClick = null;
     this._arScene = null;
     this._xrSession = null;
+
+    this._tmpPos = new THREE.Vector3();
+    this._tmpQuat = new THREE.Quaternion();
   }
 
-  /** Путь к манифесту со списком маркеров */
-  static MANIFEST_URL = './assets/recognitionimages.json';
-
-  async makeGeneratedBitmap() {
-    this.ui.log('Generating fallback bitmap...', 'warn');
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 512;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#f0f0f0';
-    ctx.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 6000; i++) {
-      ctx.fillStyle = Math.random() > 0.5 ? '#fff' : '#e0e0e0';
-      ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
-    }
-    for (let i = 0; i < 40; i++) {
-      ctx.fillStyle = `hsl(${Math.random() * 360},70%,50%)`;
-      ctx.beginPath();
-      ctx.arc(Math.random() * 512, Math.random() * 512, Math.random() * 25 + 10, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 4;
-    for (let i = 0; i < 20; i++) {
-      ctx.beginPath();
-      ctx.moveTo(Math.random() * 512, Math.random() * 512);
-      ctx.lineTo(Math.random() * 512, Math.random() * 512);
-      ctx.stroke();
-    }
-    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
-    const bmp = await createImageBitmap(blob);
-    this.ui.log('Fallback bitmap 512x512 ready', 'ok');
-    return bmp;
-  }
-
-  /**
-   * Загружает манифест recognitionimages.json.
-   * Поддерживаемые форматы:
-   *   ["T1.jpg", "T2.jpg"]
-   *   [{ "name": "T1", "src": "T1.jpg" }, ...]
-   *   { "images": [ ... ] }
-   * Пути без префикса считаются относительно ./assets/
-   */
-  async loadImageList() {
-    const url = ImageRecognition.MANIFEST_URL;
-    this.ui.log('Loading image list from: ' + url, 'info');
-    try {
-      const res = await fetch(url);
-      this.ui.log('Manifest fetch: ' + res.status + ' ' + res.statusText, res.ok ? 'ok' : 'warn');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-
-      const data = await res.json();
-      let items = Array.isArray(data) ? data : (data.images || data.markers || []);
-      if (!Array.isArray(items) || items.length === 0) {
-        throw new Error('Empty or invalid image list');
-      }
-
-      return items.map((item, i) => {
-        if (typeof item === 'string') {
-          const name = item.replace(/\.[^.]+$/, '') || ('T' + (i + 1));
-          const src = item.startsWith('./') || item.startsWith('/') || item.startsWith('http')
-              ? item
-              : './assets/' + item;
-          return { name, src };
-        }
-        const name = item.name || item.id || ('T' + (i + 1));
-        let src = item.src || item.url || item.path || item.file;
-        if (!src) throw new Error('Item #' + i + ' has no src');
-        if (!src.startsWith('./') && !src.startsWith('/') && !src.startsWith('http')) {
-          src = './assets/' + src;
-        }
-        return { name, src };
-      });
-    } catch (e) {
-      this.ui.log('Manifest load failed: ' + e.message, 'err');
-      return null;
-    }
-  }
-
-  async loadTargetImage(src) {
-    this.ui.log('Loading target from: ' + src, 'info');
-    try {
-      this.ui.log('Trying fetch...', 'info');
-      const res = await fetch(src);
-      this.ui.log('Fetch status: ' + res.status + ' ' + res.statusText, res.ok ? 'ok' : 'warn');
-      if (res.ok) {
-        const blob = await res.blob();
-        this.ui.log('Blob: size=' + blob.size + ' type=' + blob.type, 'info');
-        const bmp = await createImageBitmap(blob);
-        this.ui.log('Bitmap from fetch: ' + bmp.width + 'x' + bmp.height, 'ok');
-        return { bmp, source: 'fetch' };
-      }
-    } catch (e) {
-      this.ui.log('Fetch failed: ' + e.message, 'err');
-    }
-
-    this.ui.log('Trying Image() loader...', 'warn');
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        this.ui.log('Image loaded: ' + img.width + 'x' + img.height, 'ok');
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        c.getContext('2d').drawImage(img, 0, 0);
-        c.toBlob(async (blob) => {
-          const bmp = await createImageBitmap(blob);
-          this.ui.log('Bitmap from Image(): ' + bmp.width + 'x' + bmp.height, 'ok');
-          resolve({ bmp, source: 'image' });
-        }, 'image/png');
-      };
-      img.onerror = () => {
-        this.ui.log('Image() failed', 'err');
-        resolve(null);
-      };
-      img.src = src;
-    });
-  }
-
-  /**
-   * Загружает список картинок из манифеста, таблицу квестов и готовит ImageBitmap[] для XR Image Tracking.
-   * При ошибке манифеста или загрузки — fallback на сгенерированный маркер.
-   */
   async init() {
     this.state = 'waitingImage';
-    this.targetBitmaps = [];
 
-    // Загрузка таблиц квестов и ответов
     this.ui.log('Loading quest table & answers...', 'info');
     await this.questManager.loadData();
     if (this.questManager.isLoaded) {
-      this.ui.log(`Quest data loaded: ${this.questManager.quests.size} quests, ${this.questManager.answers.size} answers`, 'ok');
-    } else {
-      this.ui.log('Failed to load quest data, falling back to default marker info', 'warn');
+      this.ui.log(`Quest data loaded: ${this.questManager.quests.size} quests`, 'ok');
     }
 
-    const list = await this.loadImageList();
+    this.policies.init();
+    await this.imageReco.init();
 
-    if (list && list.length) {
-      this.ui.log('Found ' + list.length + ' image(s) in manifest', 'info');
-      for (const item of list) {
-        const result = await this.loadTargetImage(item.src);
-        if (result && result.bmp) {
-          this.targetBitmaps.push({
-            bmp: result.bmp,
-            name: item.name,
-            src: item.src,
-            source: result.source
-          });
-          this.ui.log('Ready: ' + item.name + ' via ' + result.source, 'ok');
-        } else {
-          this.ui.log('Skip failed: ' + item.src, 'err');
-        }
-      }
-    }
-
-    if (this.targetBitmaps.length === 0) {
-      this.ui.log('No images loaded, using generated fallback', 'err');
-      const bmp = await this.makeGeneratedBitmap();
-      this.targetBitmaps.push({ bmp, name: 'T1', src: '(generated)', source: 'generated' });
-
-      const c = document.createElement('canvas');
-      c.width = 128;
-      c.height = 128;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#f0f0f0';
-      ctx.fillRect(0, 0, 128, 128);
-      ctx.fillStyle = '#ff0055';
-      ctx.fillRect(32, 32, 64, 64);
-    }
-
-    const names = this.targetBitmaps.map(t => t.name).join(', ');
     this.ui.enableArButton();
-    this.ui.log('state → waitingImage | markers: ' + names, 'info');
+    this.ui.log('state → waitingImage | ready', 'info');
   }
 
-  /** Массив ImageBitmap (сырой). */
-  getBitmaps() {
-    return this.targetBitmaps.map(t => t.bmp);
-  }
-
-  /**
-   * Готовый массив для XRSessionInit.trackedImages.
-   */
   getTrackedImages(widthInMeters = 0.2) {
-    return this.targetBitmaps
-        .filter(t => t && t.bmp)
-        .map(t => ({
-          image: t.bmp,
-          widthInMeters
-        }));
-  }
-
-  /** Имя маркера по индексу из getImageTrackingResults(). */
-  getMarkerName(idx) {
-    const entry = this.targetBitmaps[idx];
-    return entry ? entry.name : ('T' + (idx + 1));
-  }
-
-  /** Обратная совместимость (первый битмап). */
-  get targetBitmap() {
-    return this.targetBitmaps[0]?.bmp ?? null;
+    return this.imageReco.getTrackedImages(widthInMeters);
   }
 
   attachInput(xrSession, arScene) {
@@ -256,95 +80,63 @@ export class ImageRecognition {
     this._boundOnClick = null;
   }
 
-  /**
-   * Показывает панель "ИЩИТЕ!" со случайной картинкой из списка распознаваемых маркеров.
-   */
-  presentSearchPrompt(hintText) {
+  presentSearchPrompt() {
     this.state = 'waitingImage';
-    if (!this.targetBitmaps.length) return;
+    this.ui.hideScanFrame();
+    if (!this.imageReco.targetBitmaps.length) return;
 
-    const pick = this.targetBitmaps[Math.floor(Math.random() * this.targetBitmaps.length)];
+    let pick;
+    if (this.policies.mode >= 2 && this.policies.expectedMarker) {
+      pick = this.imageReco.targetBitmaps.find(t => t.name === this.policies.expectedMarker)
+          || this.imageReco.targetBitmaps[0];
+    } else {
+      pick = this.imageReco.targetBitmaps[Math.floor(Math.random() * this.imageReco.targetBitmaps.length)];
+    }
+
     this.ui.showQuestStart(pick.src, 'ИЩИТЕ!');
+    this.ui.showScanFrameBlink();
   }
 
-  /**
-   * Полный сброс состояния распознавания (при завершении AR-сессии).
-   */
   reset(arScene) {
-    for (const [, entry] of this.trackedMarkers) {
-      if (entry.arTarget) {
-        if (arScene) arScene.scene.remove(entry.arTarget);
-        this._disposeTarget(entry.arTarget);
+    for (const [, entry] of this.imageReco.trackedMarkers) {
+      if (entry.arTarget && arScene) {
+        arScene.scene.remove(entry.arTarget);
       }
+      this.imageReco.disposeEntry(entry);
     }
-    this.trackedMarkers.clear();
+    this.imageReco.trackedMarkers.clear();
+
+    this.mediaPipeReco.clear(arScene);
+
     this.state = 'waitingImage';
+    this.policies.reset();
 
     this.ui.hideQuestStart();
     this.ui.hideResult();
+    this.ui.hideScanFrame();
+    this.ui.hideDetectedObjectsInfo();
+  }
+
+  _parseRichText(text) {
+    if (!text) return '';
+    return text
+      .replace(/<size=\+?(\d+)>/gi, '<span style="font-size: calc(1em + $1px)">')
+      .replace(/<\/size>/gi, '</span>');
   }
 
   _onSelect(ev) {
     if (this.state !== 'waitingInput' || !this._arScene) return;
     this._pointerNdc.set(0, 0);
-    this._tryHitOk();
   }
 
   _onCanvasTap(ev) {
     if (this.state !== 'waitingInput' || !this._arScene) return;
     const rect = this._arScene.renderer.domElement.getBoundingClientRect();
-    let clientX, clientY;
-    if (ev.changedTouches && ev.changedTouches.length) {
-      clientX = ev.changedTouches[0].clientX;
-      clientY = ev.changedTouches[0].clientY;
-    } else {
-      clientX = ev.clientX;
-      clientY = ev.clientY;
-    }
+    let clientX = ev.changedTouches ? ev.changedTouches[0].clientX : ev.clientX;
+    let clientY = ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY;
+
     this._pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this._pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    this._tryHitOk();
-  }
-
-  /**
-   * Запасной тап-ярлык. Основной ввод — клики по кнопкам CSS3D-панели.
-   */
-  _tryHitOk() {
-    if (!this._arScene) return;
-    const camera = this._arScene.camera;
-    if (!camera) return;
-    this._raycaster.setFromCamera(this._pointerNdc, camera);
-
-    for (const [, entry] of this.trackedMarkers) {
-      if (!entry.arTarget || !entry.arTarget.visible || entry.dismissed) continue;
-      const ud = entry.arTarget.userData || {};
-      const okPanel = ud.okPanel || ud.okButton
-          || (ud.panels && (ud.panels.okPanel || ud.panels.okButton));
-      if (!okPanel) continue;
-      const hits = this._raycaster.intersectObject(okPanel, false);
-      if (hits.length > 0) {
-        this._handleOk(entry);
-        return;
-      }
-    }
-
-    // mobile UX: one visible target → any tap = OK (только для Art/AntiArt)
-    if (this.state === 'waitingInput') {
-      for (const [, entry] of this.trackedMarkers) {
-        if (entry.arTarget && entry.arTarget.visible && !entry.dismissed) {
-          this._handleOk(entry);
-          return;
-        }
-      }
-    }
-  }
-
-  _handleOk(entry) {
-    if (entry.dismissed) return;
-    const type = entry.questData?.answerType;
-    if (type === 'Art' || type === 'AntiArt' || !type) {
-      this._onQuestionAnswered(entry, true);
-    }
   }
 
   _onQuestionAnswered(entry, value) {
@@ -353,6 +145,9 @@ export class ImageRecognition {
 
     if (entry.arTarget) {
       entry.arTarget.visible = false;
+      if (this._arScene && entry.arTarget.parent) {
+        this._arScene.scene.remove(entry.arTarget);
+      }
     }
 
     const questData = entry.questData;
@@ -364,13 +159,16 @@ export class ImageRecognition {
     }
 
     this.state = 'showingResult';
-    this.ui.log(
-        `[Quest ${questId || '?'}] answer=${JSON.stringify(value)} → ${isCorrect ? 'CORRECT' : 'WRONG'}`,
-        isCorrect ? 'ok' : 'warn'
-    );
+
+    if (questId) {
+      const quest = this.questManager.quests.get(questId);
+      if (quest) {
+        const nextId = isCorrect ? quest.RightWayQuest : quest.WrongWayQuest;
+        if (nextId) this.policies.onQuestAdvanced(nextId);
+      }
+    }
 
     const reactionText = this.questManager.getReactionText(questId, isCorrect);
-
     this.ui.showResult(isCorrect, reactionText, () => {
       this.presentSearchPrompt();
     });
@@ -395,29 +193,23 @@ export class ImageRecognition {
         const pose = frame.getPose(result.imageSpace, xrRefSpace);
         if (!pose || !pose.transform) continue;
 
-        let entry = this.trackedMarkers.get(idx);
+        let entry = this.imageReco.trackedMarkers.get(idx);
 
         if (!entry) {
           if (this.state !== 'waitingImage') continue;
 
-          const markerName = this.getMarkerName(idx);
-          const bitmapEntry = this.targetBitmaps.find(t => t.name === markerName);
+          const markerName = this.imageReco.getMarkerName(idx);
+          const policyCheck = this.policies.canRecognize(markerName);
+          if (!policyCheck.ok) continue;
 
+          const bitmapEntry = this.imageReco.targetBitmaps.find(t => t.name === markerName);
           const questData = this.questManager.getArTargetData(markerName);
 
-          if (questData && questData.questId) {
-            this.ui.log(`[Quest] Matched marker "${markerName}" to Quest ID "${questData.questId}"`, 'ok');
-            if (questData.question) {
-              this.ui.log(`[Quest] Question: "${questData.question}"`, 'info');
-            }
-          } else {
-            this.ui.log(`[Quest] No quest match for marker "${markerName}". Using fallback data.`, 'warn');
-          }
-
+          const rawMainText = questData?.mainText || '';
           const targetInfoData = {
             title: questData?.title || markerName,
             question: questData?.question || questData?.title || markerName,
-            mainText: questData?.mainText || '',
+            mainText: this._parseRichText(rawMainText),
             answerType: questData?.answerType || 'Slide',
             options: questData?.options || [],
             imageSrc: bitmapEntry ? bitmapEntry.src : '',
@@ -426,27 +218,53 @@ export class ImageRecognition {
           };
 
           const arTarget = createArTargetSync(targetInfoData, {
+            ui: this.ui,
             onAnswer: (value) => {
-              const e = this.trackedMarkers.get(idx);
+              const e = this.imageReco.trackedMarkers.get(idx);
               if (e) this._onQuestionAnswered(e, value);
             }
           });
 
-          if (!arTarget || !arTarget.isObject3D) {
-            this.ui.log('[' + idx + '] createArTargetSync returned invalid object', 'err');
-            continue;
-          }
-
+          arTarget.visible = false;
           arScene.scene.add(arTarget);
-          entry = { arTarget, lastState: trackingState, dismissed: false, questData };
-          this.trackedMarkers.set(idx, entry);
 
-          this.state = 'waitingInput';
-          this.ui.log('[' + idx + '] AR Target created for marker: ' + markerName + ' (state=' + trackingState + ')', 'ok');
-          this.ui.log('state → waitingInput', 'info');
+          entry = {
+            arTarget,
+            lastState: trackingState,
+            dismissed: false,
+            questData,
+            markerName,
+            bitmapEntry,
+            anchor: null,
+            anchorCreating: false,
+            recognizing: true,
+            poseSamples: [],
+            effectDone: false,
+            pendingAnchorPose: null
+          };
+
+          this.imageReco.trackedMarkers.set(idx, entry);
+          this.policies.onRecognized(markerName);
+          this.state = 'recognizing';
 
           this.ui.hideQuestStart();
-          playSound("click");
+          playSound('click');
+
+          this.ui.playScanEffect(() => {
+            const e = this.imageReco.trackedMarkers.get(idx);
+            if (!e || e.dismissed) return;
+
+            e.effectDone = true;
+            e.pendingAnchorPose = this.imageReco.computeStablePose(e.poseSamples);
+            e.recognizing = false;
+
+            this.ui.hideScanFrame();
+            this.ui.hideQuestStart();
+
+            if (e.arTarget) e.arTarget.visible = true;
+
+            this.state = 'waitingInput';
+          });
         }
 
         if (entry.dismissed) {
@@ -455,73 +273,75 @@ export class ImageRecognition {
         }
 
         const target = entry.arTarget;
-        if (!target || !target.isObject3D) continue;
+        if (!target) continue;
 
-        const t = pose.transform;
-        const pos = t.position;
-        const ori = t.orientation;
-
-        if (target.position && pos &&
-            Number.isFinite(pos.x) && Number.isFinite(pos.y) && Number.isFinite(pos.z)) {
-          target.position.set(pos.x, pos.y, pos.z);
+        if (entry.recognizing || !entry.effectDone) {
+          const t = pose.transform;
+          if (t.position && t.orientation) {
+            entry.poseSamples.push({
+              px: t.position.x, py: t.position.y, pz: t.position.z,
+              qx: t.orientation.x, qy: t.orientation.y, qz: t.orientation.z, qw: t.orientation.w
+            });
+            target.position.set(t.position.x, t.position.y, t.position.z);
+            target.quaternion.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
+          }
+          entry.lastState = trackingState;
+          continue;
         }
 
-        if (target.quaternion && ori &&
-            Number.isFinite(ori.x) && Number.isFinite(ori.y) &&
-            Number.isFinite(ori.z) && Number.isFinite(ori.w)) {
-          target.quaternion.set(ori.x, ori.y, ori.z, ori.w);
+        if (!entry.anchor && !entry.anchorCreating && typeof frame.createAnchor === 'function') {
+          entry.anchorCreating = true;
+          const createPromise = frame.createAnchor(pose.transform, xrRefSpace);
+          if (createPromise && typeof createPromise.then === 'function') {
+            createPromise
+                .then((anchor) => { if (entry && !entry.dismissed) entry.anchor = anchor; })
+                .finally(() => { if (entry) entry.anchorCreating = false; });
+          } else {
+            entry.anchorCreating = false;
+          }
+        }
+
+        let usePose = pose;
+        if (entry.anchor && entry.anchor.anchorSpace) {
+          const anchorPose = frame.getPose(entry.anchor.anchorSpace, xrRefSpace);
+          if (anchorPose && anchorPose.transform) usePose = anchorPose;
+        }
+
+        const pos = usePose.transform.position;
+        const ori = usePose.transform.orientation;
+
+        if (pos) {
+          this._tmpPos.set(pos.x, pos.y, pos.z);
+          target.position.lerp(this._tmpPos, ImageReco.SMOOTH_FACTOR);
+        }
+        if (ori) {
+          this._tmpQuat.set(ori.x, ori.y, ori.z, ori.w);
+          target.quaternion.slerp(this._tmpQuat, ImageReco.SMOOTH_FACTOR);
         }
 
         entry.lastState = trackingState;
 
-        if (target.scale) {
-          target.scale.setScalar(trackingState === 'emulated' ? 0.7 : 1.0);
+        if (frameCount % 30 === 0) {
+          this.mediaPipeReco.processDetection(entry, arScene);
         }
       }
 
-      for (const [idx, entry] of this.trackedMarkers) {
+      for (const [idx, entry] of this.imageReco.trackedMarkers) {
         if (!seen.has(idx) && entry.lastState !== 'lost') {
           entry.lastState = 'lost';
-          this.ui.log('[' + idx + '] Tracking lost', 'warn');
-
-          if (entry.arTarget) {
+          if (entry.arTarget && entry.arTarget.parent) {
             arScene.scene.remove(entry.arTarget);
-            this._disposeTarget(entry.arTarget);
           }
-          this.trackedMarkers.delete(idx);
+          this.imageReco.disposeEntry(entry);
+          this.imageReco.trackedMarkers.delete(idx);
 
           if (!entry.dismissed) {
-            this.ui.log('state → waitingImage (lost before answer)', 'info');
-            this.presentSearchPrompt('Маркер потерян. Покажите картинку снова.');
+            this.presentSearchPrompt();
           }
         }
       }
     } catch (e) {
-      if (frameCount % 60 === 0) {
-        this.ui.log('getImageTrackingResults err: ' + (e && e.message ? e.message : String(e)), 'err');
-      }
+      // Игнорируем ошибки кадра
     }
-  }
-
-  _disposeTarget(group) {
-    if (!group) return;
-    group.traverse((obj) => {
-      // CSS3DObject — убираем DOM-элемент
-      if (obj.element && obj.element.parentNode) {
-        obj.element.parentNode.removeChild(obj.element);
-      }
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach(m => {
-            if (m.map) m.map.dispose();
-            m.dispose();
-          });
-        } else {
-          if (obj.material.map) obj.material.map.dispose();
-          obj.material.dispose();
-        }
-      }
-    });
   }
 }
